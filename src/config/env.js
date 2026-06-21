@@ -20,14 +20,15 @@ module.exports = {
     expiresIn: process.env.JWT_EXPIRES_IN || '12h',
   },
   // SMTP untuk pengiriman email OTP registrasi merchant.
+  // Semua nilai diambil dari .env (JANGAN hardcode kredensial di sini).
   smtp: {
-    host: process.env.SMTP_HOST || 'mail.raftechsolution.web.id',
+    host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT || 465),
     secure: String(process.env.SMTP_SECURE || 'true') === 'true', // 465 = SSL
-    user: process.env.SMTP_USER || 'linkatalog@raftechsolution.web.id',
+    user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
-    fromEmail: process.env.SMTP_FROM_EMAIL || 'linkatalog@raftechsolution.web.id',
-    fromName: process.env.SMTP_FROM_NAME || 'Linkatalog',
+    fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || '',
+    fromName: process.env.SMTP_FROM_NAME || 'Zona Kasir',
   },
   // OTP
   otp: {
