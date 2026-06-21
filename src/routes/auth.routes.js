@@ -2,6 +2,7 @@ const router = require('express').Router();
 const ctrl = require('../controllers/authController');
 const validate = require('../middlewares/validate');
 const v = require('../validations');
+const turnstile = require('../middlewares/turnstile');
 
 /**
  * @swagger
@@ -55,14 +56,14 @@ const v = require('../validations');
  *       200: { description: OTP baru terkirim }
  *       429: { description: Masih dalam masa cooldown }
  */
-router.post('/login', validate(v.auth.login), ctrl.login);
-router.post('/register', validate(v.auth.register), ctrl.register);
-router.post('/verify-otp', validate(v.auth.verifyOtp), ctrl.verifyOtp);
-router.post('/resend-otp', validate(v.auth.resendOtp), ctrl.resendOtp);
+router.post('/login', turnstile, validate(v.auth.login), ctrl.login);
+router.post('/register', turnstile, validate(v.auth.register), ctrl.register);
+router.post('/verify-otp', turnstile, validate(v.auth.verifyOtp), ctrl.verifyOtp);
+router.post('/resend-otp', turnstile, validate(v.auth.resendOtp), ctrl.resendOtp);
 
 // Lupa password (publik): minta OTP, kirim ulang, lalu reset dengan OTP.
-router.post('/forgot-password', validate(v.auth.forgotPassword), ctrl.forgotPassword);
-router.post('/forgot-password/resend', validate(v.auth.forgotPassword), ctrl.resendResetOtp);
-router.post('/reset-password', validate(v.auth.resetPassword), ctrl.resetPassword);
+router.post('/forgot-password', turnstile, validate(v.auth.forgotPassword), ctrl.forgotPassword);
+router.post('/forgot-password/resend', turnstile, validate(v.auth.forgotPassword), ctrl.resendResetOtp);
+router.post('/reset-password', turnstile, validate(v.auth.resetPassword), ctrl.resetPassword);
 
 module.exports = router;

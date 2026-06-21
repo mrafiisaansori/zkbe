@@ -41,4 +41,9 @@ module.exports = {
   features: {
     qrOrder: String(process.env.FEATURE_QR_ORDER || 'false') === 'true',
   },
+  // Cloudflare Turnstile. Verifikasi AKTIF hanya bila secret di-set (production).
+  // Lokal tanpa secret -> dilewati, jadi dev tetap lancar.
+  turnstile: {
+    secret: process.env.TURNSTILE_SECRET_KEY || '',
+  },
 };
