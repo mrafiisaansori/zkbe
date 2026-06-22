@@ -9,6 +9,9 @@ module.exports = {
   getById: catchAsync(async (req, res) => success(res, { data: await svc.getById(req.params.id) })),
   updateStatus: catchAsync(async (req, res) =>
     success(res, { data: await svc.updateStatus(req.params.id, req.body.status), message: 'Status merchant diperbarui' })),
+  setPlan: catchAsync(async (req, res) =>
+    success(res, { data: await svc.setPlanManual(req.params.id, req.body, req.user.id), message: 'Plan merchant diperbarui' })),
+  planHistory: catchAsync(async (req, res) => success(res, { data: await svc.planHistory(req.params.id) })),
 
   // Admin merchant - toko sendiri (merchant_id dari token)
   getOwn: catchAsync(async (req, res) => success(res, { data: await svc.getOwn(req.user.merchant_id) })),

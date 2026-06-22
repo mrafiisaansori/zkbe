@@ -4,6 +4,7 @@ const authController = require('../controllers/authController');
 // /auth/login, /register, /verify-otp, /resend-otp dilayani publik di app.js.
 // Endpoint terproteksi (butuh JWT):
 router.get('/auth/me', authController.me);
+router.use('/account', require('./account.routes'));
 router.use('/merchant', require('./merchant.routes'));
 router.use('/produk', require('./produk.routes'));
 router.use('/kategori', require('./kategori.routes'));

@@ -450,4 +450,42 @@ module.exports = {
   dashboard: {
     chart: { query: Joi.object({ tahun: Joi.number().integer().min(2000).max(2100).required() }) },
   },
+
+  // Akun sendiri: ubah password & ganti email (OTP).
+  account: {
+    changePassword: {
+      body: Joi.object({
+        old_password: Joi.string().required(),
+        new_password: Joi.string().min(6).max(100).required().messages({
+          'string.min': 'Password baru minimal 6 karakter',
+        }),
+      }),
+    },
+    emailRequest: {
+      body: Joi.object({
+        password: Joi.string().required(),
+        new_email: Joi.string().email().max(150).required(),
+      }),
+    },
+    emailVerify: {
+      body: Joi.object({
+        otp: Joi.string().pattern(/^\d{6}$/).required().messages({
+          'string.pattern.base': 'OTP harus 6 digit angka',
+        }),
+      }),
+    },
+  },
+
+  // Super admin: set plan merchant manual (FREE/PRO + masa aktif + catatan).
+  merchant: {
+    setPlan: {
+      params: idParam.params,
+      body: Joi.object({
+        plan: Joi.string().valid('FREE', 'PRO').required(),
+        pro_starts_at: Joi.date().iso().allow(null, ''),
+        pro_expires_at: Joi.date().iso().allow(null, ''),
+        note: Joi.string().max(255).allow('', null),
+      }),
+    },
+  },
 };

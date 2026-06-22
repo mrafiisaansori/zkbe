@@ -2,6 +2,11 @@ const router = require('express').Router();
 const ctrl = require('../controllers/penggunaController');
 const validate = require('../middlewares/validate');
 const v = require('../validations');
+const { requireRole, ADMIN } = require('../middlewares/role');
+
+// Manajemen pengguna hanya untuk Admin Merchant (& Super Admin). Kasir tidak
+// boleh mengelola user. Identitas & merchant diambil dari token (bukan frontend).
+router.use(requireRole(ADMIN));
 
 /**
  * @swagger

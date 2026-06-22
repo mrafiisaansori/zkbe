@@ -17,6 +17,7 @@ const Merchant = sequelize.define('m_merchant', {
   SLUG: { type: DataTypes.STRING(80) },             // katalog publik: /store/{slug}
   STATUS: { type: DataTypes.STRING(20), defaultValue: 'active' },
   PLAN: { type: DataTypes.STRING(10), defaultValue: 'FREE' }, // 'FREE' | 'PRO'
+  PRO_STARTS_AT: { type: DataTypes.DATE },          // tanggal mulai PRO (manual super admin)
   PRO_EXPIRES_AT: { type: DataTypes.DATE },         // null = belum pernah PRO
   CREATED_AT: { type: DataTypes.DATE },
   UPDATED_AT: { type: DataTypes.DATE },

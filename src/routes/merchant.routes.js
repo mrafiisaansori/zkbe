@@ -2,6 +2,8 @@ const router = require('express').Router();
 const ctrl = require('../controllers/merchantController');
 const monitor = require('../controllers/merchantMonitorController');
 const { requireSuperadmin } = require('../middlewares/role');
+const validate = require('../middlewares/validate');
+const v = require('../validations');
 
 /**
  * @swagger
@@ -60,5 +62,9 @@ router.get('/:id/identitas', requireSuperadmin, monitor.identitas);
 
 router.get('/:id', requireSuperadmin, ctrl.getById);
 router.put('/:id/status', requireSuperadmin, ctrl.updateStatus);
+
+// Aktivasi/nonaktivasi PRO manual + riwayat (Super Admin).
+router.put('/:id/plan', requireSuperadmin, validate(v.merchant.setPlan), ctrl.setPlan);
+router.get('/:id/plan-history', requireSuperadmin, ctrl.planHistory);
 
 module.exports = router;

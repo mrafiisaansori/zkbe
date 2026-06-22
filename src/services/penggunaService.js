@@ -1,4 +1,4 @@
-const { Pengguna } = require('../models');
+const { Pengguna, sequelize } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, verifyPassword, generatePassword } = require('../utils/password');
 const { currentPlan, FREE_MAX_KASIR } = require('../utils/plan');
@@ -6,7 +6,28 @@ const { currentPlan, FREE_MAX_KASIR } = require('../utils/plan');
 // Manajemen user. Password disimpan sebagai hash bcrypt.
 const PUBLIC_ATTR = ['ID', 'NAMA', 'USERNAME', 'LEVEL', 'TELP'];
 
-const list = () => Pengguna.findAll({ attributes: PUBLIC_ATTR, order: [['NAMA', 'ASC']] });
+const KASIR = 2;
+
+/**
+ * Cek apakah username sudah dipakai SECARA GLOBAL (lintas merchant).
+ * Penting: login mencari user by USERNAME tanpa scope merchant, sehingga
+ * username yang sama di 2 merchant menyebabkan tabrakan login (akun salah
+ * yang cocok). Maka username wajib unik global. Memakai raw query agar TIDAK
+ * terkena hook tenant (yang akan membatasi pengecekan ke 1 merchant saja).
+ */
+async function usernameTaken(username, exceptId) {
+  const [rows] = await sequelize.query(
+    'SELECT ID FROM m_pengguna WHERE USERNAME = ? LIMIT 1',
+    { replacements: [String(username || '').trim()] },
+  );
+  if (!rows || rows.length === 0) return false;
+  if (exceptId && Number(rows[0].ID) === Number(exceptId)) return false;
+  return true;
+}
+
+// Daftar pengguna: HANYA kasir (LEVEL 2) milik merchant ini. Akun Admin
+// sengaja disembunyikan agar admin merchant tidak menghapus akun admin utama.
+const list = () => Pengguna.findAll({ where: { LEVEL: KASIR }, attributes: PUBLIC_ATTR, order: [['NAMA', 'ASC']] });
 
 async function getById(id) {
   const u = await Pengguna.findByPk(id, { attributes: PUBLIC_ATTR });
@@ -26,8 +47,9 @@ async function create(data) {
     }
   }
 
-  const exists = await Pengguna.findOne({ where: { USERNAME: data.username } });
-  if (exists) throw new ApiError(409, 'Username sudah digunakan');
+  if (await usernameTaken(data.username)) {
+    throw new ApiError(409, 'Username sudah digunakan, silakan gunakan username lain.');
+  }
   const u = await Pengguna.create({
     NAMA: data.nama,
     USERNAME: data.username,
@@ -41,6 +63,10 @@ async function create(data) {
 async function update(id, data) {
   const u = await Pengguna.findByPk(id);
   if (!u) throw new ApiError(404, 'Pengguna tidak ditemukan');
+  // Bila username diganti, pastikan tetap unik global.
+  if (data.username && data.username !== u.USERNAME && await usernameTaken(data.username, u.ID)) {
+    throw new ApiError(409, 'Username sudah digunakan, silakan gunakan username lain.');
+  }
   await u.update({
     NAMA: data.nama ?? u.NAMA,
     USERNAME: data.username ?? u.USERNAME,
@@ -53,6 +79,10 @@ async function update(id, data) {
 async function remove(id) {
   const u = await Pengguna.findByPk(id);
   if (!u) throw new ApiError(404, 'Pengguna tidak ditemukan');
+  // Admin merchant TIDAK boleh menghapus akun admin/super admin — hanya kasir.
+  if (Number(u.LEVEL) !== KASIR) {
+    throw new ApiError(403, 'Hanya akun kasir yang dapat dihapus. Akun admin tidak boleh dihapus.');
+  }
   await u.destroy();
   return true;
 }

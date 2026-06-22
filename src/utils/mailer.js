@@ -85,4 +85,23 @@ async function sendSubscriptionActivatedEmail(toEmail, { storeName, paket, expir
   return getTransporter().sendMail({ from: FROM, to: toEmail, subject, text, html });
 }
 
-module.exports = { sendOtpEmail, sendPasswordResetEmail, sendSubscriptionActivatedEmail, getTransporter };
+// Kirim OTP untuk verifikasi penggantian email akun/toko (dikirim ke EMAIL BARU).
+async function sendEmailChangeOtp(toEmail, { otp, storeName }) {
+  const subject = `Kode Verifikasi Ganti Email - ${env.smtp.fromName}`;
+  const text =
+    `Anda meminta penggantian email akun toko "${storeName || ''}".\n` +
+    `Kode OTP verifikasi email baru Anda: ${otp}\n` +
+    `Kode berlaku ${env.otp.ttlMinutes} menit. Jika ini bukan Anda, abaikan email ini.`;
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto;color:#1f2937">
+      <h2 style="color:#03045e;margin-bottom:4px">Verifikasi Email Baru</h2>
+      <p>Anda meminta penggantian email akun toko <b>${storeName || ''}</b>.</p>
+      <p>Gunakan kode berikut untuk mengonfirmasi email baru ini:</p>
+      <div style="font-size:32px;font-weight:700;letter-spacing:8px;background:#eef2ff;color:#03045e;
+                  text-align:center;padding:16px;border-radius:12px;margin:16px 0">${otp}</div>
+      <p style="font-size:13px;color:#6b7280">Kode berlaku ${env.otp.ttlMinutes} menit. Jika ini bukan Anda, abaikan email ini.</p>
+    </div>`;
+  return getTransporter().sendMail({ from: FROM, to: toEmail, subject, text, html });
+}
+
+module.exports = { sendOtpEmail, sendPasswordResetEmail, sendSubscriptionActivatedEmail, sendEmailChangeOtp, getTransporter };

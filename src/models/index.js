@@ -29,6 +29,8 @@ const SubscriptionPayment = require('./SubscriptionPayment');
 const Merchant = require('./Merchant');
 const RegistrationOtp = require('./RegistrationOtp');
 const PasswordResetOtp = require('./PasswordResetOtp');
+const EmailChangeOtp = require('./EmailChangeOtp');
+const PlanHistory = require('./PlanHistory');
 const Provinsi = require('./Provinsi');
 const Kota = require('./Kota');
 const { scopeModel } = require('../utils/tenancy');
@@ -107,5 +109,5 @@ module.exports = {
   OpenBill, OpenBillDetail,
   TaxSetting, Voucher, SubscriptionSetting, SubscriptionPayment, Meja,
   ModifierGroup, ModifierOption, ProdukModifier,
-  Merchant, RegistrationOtp, PasswordResetOtp, Provinsi, Kota,
+  Merchant, RegistrationOtp, PasswordResetOtp, EmailChangeOtp, PlanHistory, Provinsi, Kota,
 };
