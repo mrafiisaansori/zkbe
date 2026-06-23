@@ -2,6 +2,10 @@ const router = require('express').Router();
 const ctrl = require('../controllers/supplierController');
 const validate = require('../middlewares/validate');
 const v = require('../validations');
+const { requireRole, ADMIN } = require('../middlewares/role');
+
+// CRUD supplier hanya untuk Admin Merchant & Super Admin (bukan kasir).
+router.use(requireRole(ADMIN));
 
 /**
  * @swagger

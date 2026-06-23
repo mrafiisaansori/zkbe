@@ -49,6 +49,7 @@ DetailPenjualan.belongsTo(Produk, { foreignKey: 'ID_PRODUK', targetKey: 'ID', as
 
 // Pembelian
 Pembelian.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'user' });
+Pembelian.belongsTo(Supplier, { foreignKey: 'ID_SUPPLIER', targetKey: 'ID', as: 'supplier' });
 Pembelian.hasMany(DetailPembelian, { foreignKey: 'ID_TRANSAKSI_PEMBELIAN', sourceKey: 'ID', as: 'detail' });
 DetailPembelian.belongsTo(Pembelian, { foreignKey: 'ID_TRANSAKSI_PEMBELIAN', targetKey: 'ID', as: 'pembelian' });
 DetailPembelian.belongsTo(Produk, { foreignKey: 'ID_PRODUK', targetKey: 'ID', as: 'produk' });
@@ -56,6 +57,8 @@ DetailPembelian.belongsTo(Supplier, { foreignKey: 'ID_SUPPLIER', targetKey: 'ID'
 
 // Retur
 Retur.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'user' });
+Retur.belongsTo(Supplier, { foreignKey: 'ID_SUPPLIER', targetKey: 'ID', as: 'supplier' });
+Retur.belongsTo(Pembelian, { foreignKey: 'ID_PEMBELIAN', targetKey: 'ID', as: 'pembelian' });
 Retur.hasMany(DetailRetur, { foreignKey: 'ID_TRANSAKSI_RETUR', sourceKey: 'ID', as: 'detail' });
 DetailRetur.belongsTo(Retur, { foreignKey: 'ID_TRANSAKSI_RETUR', targetKey: 'ID', as: 'retur' });
 DetailRetur.belongsTo(Produk, { foreignKey: 'ID_PRODUK', targetKey: 'ID', as: 'produk' });

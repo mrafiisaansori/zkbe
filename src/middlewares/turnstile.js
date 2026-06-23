@@ -11,9 +11,20 @@ const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
  * Token dikirim frontend lewat body `turnstile_token` (atau header cf-turnstile-response).
  * Setelah diverifikasi, field dihapus dari body agar validasi Joi tidak menolaknya.
  */
+// Deteksi request yang berasal dari localhost/dev (host atau IP loopback) →
+// lewati verifikasi Turnstile agar pengembangan lokal tidak terganggu.
+function isLocalRequest(req) {
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase();
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1'
+      || host.endsWith('.local') || host.endsWith('.localhost')) return true;
+  const ip = String(req.ip || '').replace('::ffff:', '');
+  return ip === '127.0.0.1' || ip === '::1';
+}
+
 module.exports = async function verifyTurnstile(req, res, next) {
   const secret = env.turnstile.secret;
   if (!secret) return next(); // nonaktif (dev / belum dikonfigurasi)
+  if (isLocalRequest(req)) return next(); // localhost → lewati (dev/test lokal)
 
   const token = (req.body && req.body.turnstile_token) || req.headers['cf-turnstile-response'];
   if (!token) return next(new ApiError(400, 'Verifikasi keamanan wajib diselesaikan.'));

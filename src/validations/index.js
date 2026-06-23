@@ -103,6 +103,9 @@ module.exports = {
         nama: Joi.string().max(100).required(),
         alamat: Joi.string().allow('', null),
         no_telp: Joi.string().allow('', null),
+        email: Joi.string().email().allow('', null),
+        catatan: Joi.string().allow('', null),
+        status: Joi.number().valid(0, 1).default(1),
         nama_pic: Joi.string().allow('', null),
         no_telp_pic: Joi.string().allow('', null),
       }),
@@ -113,6 +116,9 @@ module.exports = {
         nama: Joi.string().max(100),
         alamat: Joi.string().allow('', null),
         no_telp: Joi.string().allow('', null),
+        email: Joi.string().email().allow('', null),
+        catatan: Joi.string().allow('', null),
+        status: Joi.number().valid(0, 1),
         nama_pic: Joi.string().allow('', null),
         no_telp_pic: Joi.string().allow('', null),
       }).min(1),
@@ -353,7 +359,13 @@ module.exports = {
       body: Joi.object({
         no_nota: Joi.string().max(50).required(),
         tanggal: Joi.date().iso().required(),
-        id_user: Joi.number().integer().required(),
+        id_supplier: Joi.number().integer().allow(null),
+        catatan: Joi.string().allow('', null),
+        items: Joi.array().items(Joi.object({
+          id_produk: Joi.number().integer().required(),
+          harga_beli: Joi.number().integer().min(0).required(),
+          qty: Joi.number().positive().required(),
+        })).min(1).required(),
       }),
     },
     update: {
@@ -361,15 +373,13 @@ module.exports = {
       body: Joi.object({
         no_nota: Joi.string().max(50),
         tanggal: Joi.date().iso(),
-      }).min(1),
-    },
-    addDetail: {
-      params: idParam.params,
-      body: Joi.object({
-        id_produk: Joi.number().integer().required(),
-        harga_beli: Joi.number().integer().min(0).required(),
-        qty: Joi.number().positive().required(),
-        id_supplier: Joi.number().integer().required(),
+        id_supplier: Joi.number().integer().allow(null),
+        catatan: Joi.string().allow('', null),
+        items: Joi.array().items(Joi.object({
+          id_produk: Joi.number().integer().required(),
+          harga_beli: Joi.number().integer().min(0).required(),
+          qty: Joi.number().positive().required(),
+        })).min(1).required(),
       }),
     },
   },
@@ -379,7 +389,17 @@ module.exports = {
       body: Joi.object({
         no_nota: Joi.string().max(50).required(),
         tanggal: Joi.date().iso().required(),
-        id_user: Joi.number().integer().required(),
+        id_supplier: Joi.number().integer().allow(null),
+        id_pembelian: Joi.number().integer().allow(null),
+        catatan: Joi.string().allow('', null),
+        items: Joi.array().items(Joi.object({
+          id_produk: Joi.number().integer().required(),
+          qty: Joi.number().positive().required(),
+          alasan: Joi.string().max(150).allow('', null),
+          kondisi: Joi.string().max(50).allow('', null),
+          harga: Joi.number().integer().min(0).allow(null),
+          keterangan: Joi.string().allow('', null),
+        })).min(1).required(),
       }),
     },
     update: {
@@ -387,15 +407,17 @@ module.exports = {
       body: Joi.object({
         no_nota: Joi.string().max(50),
         tanggal: Joi.date().iso(),
-      }).min(1),
-    },
-    addDetail: {
-      params: idParam.params,
-      body: Joi.object({
-        id_produk: Joi.number().integer().required(),
-        qty: Joi.number().positive().required(),
-        id_supplier: Joi.number().integer().required(),
-        keterangan: Joi.string().allow('', null),
+        id_supplier: Joi.number().integer().allow(null),
+        id_pembelian: Joi.number().integer().allow(null),
+        catatan: Joi.string().allow('', null),
+        items: Joi.array().items(Joi.object({
+          id_produk: Joi.number().integer().required(),
+          qty: Joi.number().positive().required(),
+          alasan: Joi.string().max(150).allow('', null),
+          kondisi: Joi.string().max(50).allow('', null),
+          harga: Joi.number().integer().min(0).allow(null),
+          keterangan: Joi.string().allow('', null),
+        })).min(1).required(),
       }),
     },
   },
