@@ -77,11 +77,12 @@ async function updateOwn(merchantId, data) {
 }
 
 /**
- * Super Admin: set plan merchant secara MANUAL (FREE/PRO) + masa aktif + catatan.
- * - PRO: wajib pro_expires_at (atau default +1 bulan dari pro_starts_at/sekarang).
- * - FREE: nonaktifkan PRO (kosongkan masa aktif).
+ * Super Admin: set plan merchant secara MANUAL (FREE/PRO/BUSINESS) + masa aktif + catatan.
+ * - PRO / BUSINESS: wajib expires (atau default +1 bulan dari starts/sekarang).
+ *   BUSINESS = superset PRO + akses payment gateway Midtrans QRIS dinamis.
+ * - FREE: nonaktifkan plan berbayar (kosongkan masa aktif).
  * - Setiap perubahan dicatat di m_plan_history (audit).
- * Fitur PRO langsung mengikuti nilai ini (effectivePlan membaca PLAN+PRO_EXPIRES_AT).
+ * Fitur PRO/BUSINESS langsung mengikuti nilai ini (effectivePlan membaca PLAN+PRO_EXPIRES_AT).
  */
 async function setPlanManual(id, { plan, pro_starts_at, pro_expires_at, note }, changedBy) {
   const m = await getById(id);
@@ -89,7 +90,7 @@ async function setPlanManual(id, { plan, pro_starts_at, pro_expires_at, note }, 
 
   let starts = null;
   let expires = null;
-  if (plan === 'PRO') {
+  if (plan === 'PRO' || plan === 'BUSINESS') {
     starts = pro_starts_at ? new Date(pro_starts_at) : new Date();
     if (pro_expires_at) {
       expires = new Date(pro_expires_at);
@@ -99,11 +100,11 @@ async function setPlanManual(id, { plan, pro_starts_at, pro_expires_at, note }, 
       expires.setMonth(expires.getMonth() + 1);
     }
     if (expires <= new Date()) {
-      throw new ApiError(422, 'Tanggal expired PRO harus di masa depan.');
+      throw new ApiError(422, `Tanggal expired ${plan} harus di masa depan.`);
     }
-    await m.update({ PLAN: 'PRO', PRO_STARTS_AT: starts, PRO_EXPIRES_AT: expires });
+    await m.update({ PLAN: plan, PRO_STARTS_AT: starts, PRO_EXPIRES_AT: expires });
   } else {
-    // FREE: nonaktifkan PRO. PRO_EXPIRES_AT dikosongkan agar fitur kembali FREE.
+    // FREE: nonaktifkan plan berbayar. PRO_EXPIRES_AT dikosongkan agar fitur kembali FREE.
     await m.update({ PLAN: 'FREE', PRO_EXPIRES_AT: null });
   }
 

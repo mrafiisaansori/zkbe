@@ -2,6 +2,8 @@ const router = require('express').Router();
 const ctrl = require('../controllers/voucherController');
 const validate = require('../middlewares/validate');
 const v = require('../validations');
+const { requireProPlan } = require('../middlewares/plan');
+const { forbidGudang } = require('../middlewares/role');
 
 /**
  * @swagger
@@ -15,6 +17,8 @@ const v = require('../validations');
  *   put: { summary: Ubah voucher, tags: [Voucher], security: [{ basicAuth: [] }], responses: { 200: { description: OK } } }
  *   delete: { summary: Hapus voucher, tags: [Voucher], security: [{ basicAuth: [] }], responses: { 200: { description: OK } } }
  */
+router.use(forbidGudang); // Voucher = fitur marketing/admin, bukan akses Gudang.
+router.use(requireProPlan);
 router.get('/', ctrl.list);
 router.get('/validate', ctrl.validate);
 router.post('/', validate(v.voucher.create), ctrl.create);

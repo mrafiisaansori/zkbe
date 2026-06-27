@@ -1,47 +1,54 @@
 const svc = require('../services/subscriptionService');
 const catchAsync = require('../utils/catchAsync');
 const { success, created } = require('../utils/response');
-const { withImageUrl } = require('../utils/fileUrl');
 
-const withQris = (row, req) => withImageUrl(row, 'QRIS_IMAGE', req);
-const withBukti = (row, req) => withImageUrl(row, 'BUKTI', req);
+function safePayment(row) {
+  if (!row) return row;
+  const plain = typeof row.toJSON === 'function' ? row.toJSON() : { ...row };
+  delete plain.RAW_RESPONSE;
+  delete plain.LAST_NOTIFICATION;
+  delete plain.QR_STRING;
+  return plain;
+}
+
+function safeSetting(row) {
+  const plain = typeof row.toJSON === 'function' ? row.toJSON() : { ...row };
+  delete plain.QRIS_IMAGE;
+  delete plain.QRIS_LABEL;
+  return plain;
+}
 
 module.exports = {
   // ===== Setting (global) =====
   getSetting: catchAsync(async (req, res) =>
-    success(res, { data: withQris(await svc.getSetting(), req) })),
+    success(res, { data: safeSetting(await svc.getSetting()) })),
 
-  updateSetting: catchAsync(async (req, res) => {
-    const imagePath = req.file ? `uploads/subscription/${req.file.filename}` : undefined;
-    return success(res, { data: withQris(await svc.updateSetting(req.body, imagePath), req), message: 'Pengaturan langganan diperbarui' });
-  }),
+  updateSetting: catchAsync(async (req, res) =>
+    success(res, { data: safeSetting(await svc.updateSetting(req.body)), message: 'Harga paket diperbarui' })),
 
   // ===== Merchant =====
   billing: catchAsync(async (req, res) => {
     const data = await svc.billing();
-    data.payments = (data.payments || []).map((p) => withBukti(p, req));
-    if (data.latest) data.latest = withBukti(data.latest, req);
+    data.payments = (data.payments || []).map(safePayment);
+    data.latest = safePayment(data.latest);
     return success(res, { data });
   }),
 
   createPayment: catchAsync(async (req, res) =>
-    created(res, await svc.createPayment(req.body), 'Pembayaran langganan dibuat')),
+    created(res, safePayment(await svc.createPayment(req.body)), 'QRIS upgrade plan berhasil dibuat')),
 
-  submitPayment: catchAsync(async (req, res) => {
-    const buktiPath = req.file ? `uploads/proof/${req.file.filename}` : undefined;
-    return success(res, { data: withBukti(await svc.submitPayment(req.params.id, buktiPath), req), message: 'Bukti pembayaran terkirim, menunggu verifikasi' });
+  paymentStatus: catchAsync(async (req, res) =>
+    success(res, { data: safePayment(await svc.getPaymentStatus(req.params.id)) })),
+
+  notification: catchAsync(async (req, res) => {
+    const result = await svc.handleNotification(req.body);
+    return res.status(200).json({ success: true, ...result });
   }),
 
   // ===== Super admin =====
   listPayments: catchAsync(async (req, res) =>
-    success(res, { data: (await svc.listAllPayments(req.query)).map((p) => withBukti(p, req)) })),
+    success(res, { data: (await svc.listAllPayments(req.query)).map(safePayment) })),
 
   getPayment: catchAsync(async (req, res) =>
-    success(res, { data: withBukti(await svc.getPaymentAdmin(req.params.id), req) })),
-
-  verify: catchAsync(async (req, res) =>
-    success(res, { data: await svc.verifyPayment(req.params.id, req.user.id), message: 'Pembayaran diverifikasi, merchant menjadi PRO' })),
-
-  reject: catchAsync(async (req, res) =>
-    success(res, { data: await svc.rejectPayment(req.params.id, req.body.reason), message: 'Pembayaran ditolak' })),
+    success(res, { data: safePayment(await svc.getPaymentAdmin(req.params.id)) })),
 };

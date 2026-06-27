@@ -35,10 +35,13 @@ const tenantContext = require('../middlewares/tenantContext');
  *               logo: { type: string }
  *     responses: { 200: { description: Diperbarui } }
  */
+// GET identitas dibutuhkan lintas halaman (header nota pembelian/retur) termasuk
+// oleh role Gudang, jadi tetap diizinkan. Perubahan (PUT/upload) khusus Admin.
+const { forbidGudang } = require('../middlewares/role');
 router.get('/', ctrl.get);
-router.put('/', validate(v.identitas.update), ctrl.update);
+router.put('/', forbidGudang, validate(v.identitas.update), ctrl.update);
 // Upload banner katalog & logo toko (multipart). tenantContext setelah multer agar scope aktif.
-router.post('/banner', uploadBannerImage('banner'), tenantContext, ctrl.uploadBanner);
-router.post('/logo', uploadLogoImage('logo'), tenantContext, ctrl.uploadLogo);
+router.post('/banner', forbidGudang, uploadBannerImage('banner'), tenantContext, ctrl.uploadBanner);
+router.post('/logo', forbidGudang, uploadLogoImage('logo'), tenantContext, ctrl.uploadLogo);
 
 module.exports = router;

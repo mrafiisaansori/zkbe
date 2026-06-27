@@ -2,6 +2,10 @@ const router = require('express').Router();
 const ctrl = require('../controllers/laporanController');
 const validate = require('../middlewares/validate');
 const v = require('../validations');
+const { forbidGudang } = require('../middlewares/role');
+
+// Role Gudang TIDAK boleh mengakses laporan (data keuangan). Divalidasi backend.
+router.use(forbidGudang);
 
 /**
  * @swagger
@@ -64,5 +68,8 @@ router.get('/penjualan', validate(v.laporan.penjualan), ctrl.penjualan);
 router.get('/pendapatan', validate(v.laporan.pendapatan), ctrl.pendapatan);
 router.get('/stok', ctrl.stok);
 router.get('/penyusutan', ctrl.penyusutan);
+// Rekap LENGKAP (PRO/BUSINESS). Validasi plan dilakukan di service (403 utk FREE).
+router.get('/rekap', validate(v.laporan.rekap), ctrl.rekap);
+router.get('/rekap/export', validate(v.laporan.rekap), ctrl.rekapExport);
 
 module.exports = router;

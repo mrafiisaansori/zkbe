@@ -10,6 +10,7 @@ function levelToRole(level) {
   if (level === 0) return 'superadmin';
   if (level === 1) return 'admin';
   if (level === 2) return 'kasir';
+  if (level === 3) return 'gudang';
   return 'unknown';
 }
 

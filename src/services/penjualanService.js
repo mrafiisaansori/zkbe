@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const {
-  sequelize, Penjualan, DetailPenjualan, Produk, Pengguna, JenisBayar, RekamStok, Merchant,
+  sequelize, Penjualan, DetailPenjualan, Produk, Pengguna, JenisBayar, RekamStok, Merchant, KasShift,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { todayDate, nowTime, formatNoNota } = require('../utils/helpers');
@@ -8,6 +8,7 @@ const { activeMerchantId } = require('../utils/tenancy');
 const taxService = require('./taxService');
 const voucherService = require('./voucherService');
 const modifierService = require('./modifierService');
+const { currentPlan, hasProFeatures, PRO_UPGRADE_MESSAGE } = require('../utils/plan');
 
 // Nomor nota dengan prefix merchant (mis. "TZK-000025"). Unik antar merchant.
 async function buildNoNota(id) {
@@ -52,11 +53,24 @@ async function getById(id) {
  */
 // _trusted=true: dipakai pembayaran open bill (harga unit & teks modifier sudah
 // dihitung server saat bill dibuat). Endpoint publik/kasir TIDAK pernah set ini.
-async function checkout({ items, id_jenis_bayar, id_user, bayar, keterangan, diskon = 0, kode_voucher, _trusted = false }) {
+//
+// payment: opsional, untuk transaksi yang dibayar via payment gateway (Midtrans
+//   QRIS dinamis). { provider, status, status_bayar } -> transaksi dibuat dengan
+//   status bayar PENDING (belum lunas) sampai webhook gateway mengonfirmasi.
+//   Default (tanpa payment) = perilaku lama: STATUS_BAYAR='LUNAS'.
+async function checkout({
+  items, id_jenis_bayar, id_user, bayar, keterangan, diskon = 0, kode_voucher,
+  _trusted = false, payment = null,
+}) {
   if (!items || items.length === 0) throw new ApiError(400, 'Keranjang kosong, tidak ada item untuk dibayar');
 
   // Ambil pengaturan pajak & voucher DI LUAR transaksi (read-only, ter-scope merchant).
-  const tax = await taxService.get();
+  const plan = await currentPlan();
+  const proEnabled = hasProFeatures(plan);
+  const tax = proEnabled
+    ? await taxService.get()
+    : { PPN_ENABLED: false, PPN_PERSEN: 0, SERVICE_ENABLED: false, SERVICE_PERSEN: 0 };
+  if (kode_voucher && !proEnabled) throw new ApiError(403, PRO_UPGRADE_MESSAGE);
 
   return sequelize.transaction(async (t) => {
     // Ambil & validasi semua produk + hitung diskon per item.
@@ -101,9 +115,17 @@ async function checkout({ items, id_jenis_bayar, id_user, bayar, keterangan, dis
     const serviceCharge = tax.SERVICE_ENABLED ? Math.round((dpp * Number(tax.SERVICE_PERSEN || 0)) / 100) : 0;
     const total = dpp + ppn + serviceCharge;
 
-    if (bayar !== undefined && bayar !== null && Number(bayar) < total) {
+    // Validasi "uang dibayar" hanya untuk pembayaran tunai/manual. Pembayaran via
+    // gateway (Midtrans) dikonfirmasi belakangan lewat webhook, jadi dilewati.
+    if (!payment && bayar !== undefined && bayar !== null && Number(bayar) < total) {
       throw new ApiError(400, `Nominal bayar (${bayar}) kurang dari total (${total})`);
     }
+
+    // Tag transaksi ke sesi kas (shift) yang sedang OPEN milik kasir ini, bila ada.
+    // Null = kasir belum buka sesi -> transaksi masuk bucket "Tanpa Sesi" di laporan.
+    const activeShift = id_user
+      ? await KasShift.findOne({ where: { ID_USER: id_user, STATUS: 1 }, transaction: t })
+      : null;
 
     const header = await Penjualan.create({
       TANGGAL: todayDate(),
@@ -111,6 +133,7 @@ async function checkout({ items, id_jenis_bayar, id_user, bayar, keterangan, dis
       ID_JENIS_BAYAR: id_jenis_bayar,
       TOTAL: String(total),
       ID_USER: id_user,
+      ID_SHIFT: activeShift ? activeShift.ID : null,
       KETERANGAN: keterangan || null,
       DISKON: String(diskonGlobal),
       PPN: ppn,
@@ -118,7 +141,9 @@ async function checkout({ items, id_jenis_bayar, id_user, bayar, keterangan, dis
       KODE_VOUCHER: kodeVoucher,
       DISKON_VOUCHER: diskonVoucher,
       STATUS: 1,
-      STATUS_BAYAR: 'LUNAS',
+      STATUS_BAYAR: payment ? (payment.status_bayar || 'PENDING') : 'LUNAS',
+      PAYMENT_PROVIDER: payment ? payment.provider : null,
+      PAYMENT_STATUS: payment ? (payment.status || 'PENDING') : null,
     }, { transaction: t });
 
     const noNota = await buildNoNota(header.ID);

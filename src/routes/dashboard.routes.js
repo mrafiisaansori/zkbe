@@ -2,6 +2,7 @@ const router = require('express').Router();
 const ctrl = require('../controllers/dashboardController');
 const validate = require('../middlewares/validate');
 const v = require('../validations');
+const { forbidGudang } = require('../middlewares/role');
 
 /**
  * @swagger
@@ -31,7 +32,10 @@ const v = require('../validations');
  *     parameters: [{ in: query, name: tahun, required: true, schema: { type: integer, example: 2026 } }]
  *     responses: { 200: { description: Data 12 bulan } }
  */
-router.get('/summary', ctrl.summary);
-router.get('/chart', validate(v.dashboard.chart), ctrl.chart);
+// Dashboard keuangan (summary & chart) DILARANG untuk role Gudang.
+router.get('/summary', forbidGudang, ctrl.summary);
+router.get('/chart', forbidGudang, validate(v.dashboard.chart), ctrl.chart);
+// Dashboard operasional Gudang (stok & operasional, tanpa keuangan).
+router.get('/gudang', ctrl.gudang);
 
 module.exports = router;

@@ -161,7 +161,7 @@ module.exports = {
         nama: Joi.string().max(100).required(),
         username: Joi.string().max(100).required(),
         password: Joi.string().required(),
-        level: Joi.number().valid(1, 2).required(), // 1 admin, 2 kasir
+        level: Joi.number().valid(2, 3).required(), // 2 kasir, 3 gudang (admin merchant hanya boleh buat ini)
         telp: Joi.string().allow('', null),
       }),
     },
@@ -170,7 +170,7 @@ module.exports = {
       body: Joi.object({
         nama: Joi.string().max(100),
         username: Joi.string().max(100),
-        level: Joi.number().valid(1, 2),
+        level: Joi.number().valid(2, 3),
         telp: Joi.string().allow('', null),
       }).min(1),
     },
@@ -207,6 +207,33 @@ module.exports = {
         diskon: Joi.number().min(0).default(0),
         kode_voucher: Joi.string().allow('', null),
       }),
+    },
+  },
+
+  // Payment gateway (Midtrans QRIS dinamis) - khusus BUSINESS.
+  payment: {
+    createQris: {
+      body: Joi.object({
+        items: Joi.array().items(Joi.object({
+          id_produk: Joi.number().integer().required(),
+          qty: Joi.number().positive().required(),
+          modifier_option_ids: Joi.array().items(Joi.number().integer()).default([]),
+        })).min(1).required(),
+        id_jenis_bayar: Joi.number().integer().required(),
+        id_user: Joi.number().integer().required(),
+        diskon: Joi.number().min(0).default(0),
+        keterangan: Joi.string().allow('', null),
+        kode_voucher: Joi.string().allow('', null),
+        customer_name: Joi.string().max(80).allow('', null),
+      }),
+    },
+    status: {
+      params: Joi.object({ transaction_id: Joi.number().integer().required() }),
+    },
+    // Webhook Midtrans: payload bebas (banyak field), jangan diketat-ketat agar
+    // tidak menolak notifikasi sah. Validasi keamanan via signature di service.
+    notification: {
+      body: Joi.object().unknown(true),
     },
   },
 
@@ -250,20 +277,21 @@ module.exports = {
   subscription: {
     setting: {
       body: Joi.object({
-        qris_label: Joi.string().max(150).allow('', null),
         price_monthly: Joi.number().integer().min(0),
         price_yearly: Joi.number().integer().min(0),
+        price_business_monthly: Joi.number().integer().min(0),
+        price_business_yearly: Joi.number().integer().min(0),
         payment_ttl_hours: Joi.number().integer().min(1).max(168),
       }).min(1),
     },
     create: {
       body: Joi.object({
+        plan: Joi.string().valid('PRO', 'BUSINESS').required(),
         paket: Joi.string().valid('BULANAN', 'TAHUNAN').required(),
       }),
     },
-    reject: {
+    status: {
       params: idParam.params,
-      body: Joi.object({ reason: Joi.string().max(500).allow('', null) }),
     },
   },
 
@@ -308,6 +336,48 @@ module.exports = {
         bayar: Joi.number().min(0),
         diskon: Joi.number().min(0).default(0),
         keterangan: Joi.string().allow('', null),
+      }),
+    },
+  },
+
+  kasShift: {
+    list: {
+      query: Joi.object({
+        status: Joi.string().valid('OPEN', 'CLOSED'),
+        id_user: Joi.number().integer(),
+        tanggal_awal: Joi.date().iso(),
+        tanggal_akhir: Joi.date().iso(),
+      }),
+    },
+    open: {
+      body: Joi.object({
+        modal_awal: Joi.number().min(0).default(0),
+        station: Joi.string().max(50).allow('', null),
+        catatan: Joi.string().allow('', null),
+      }),
+    },
+    mutasi: {
+      params: idParam.params,
+      body: Joi.object({
+        tipe: Joi.string().valid('IN', 'OUT').required(),
+        nominal: Joi.number().positive().required(),
+        keterangan: Joi.string().max(255).allow('', null),
+      }),
+    },
+    close: {
+      params: idParam.params,
+      body: Joi.object({
+        actual_cash: Joi.number().min(0).required(),
+        actual_methods: Joi.array().items(Joi.object({
+          id_jenis_bayar: Joi.number().integer().required(),
+          actual: Joi.number().min(0).required(),
+        })).default([]),
+        catatan: Joi.string().allow('', null),
+      }),
+    },
+    reportDaily: {
+      query: Joi.object({
+        tanggal: Joi.date().iso().required(),
       }),
     },
   },
@@ -467,6 +537,14 @@ module.exports = {
         status: Joi.number().valid(0, 1).default(1),
       }),
     },
+    rekap: {
+      query: Joi.object({
+        tanggal_awal: Joi.date().iso().required(),
+        tanggal_akhir: Joi.date().iso().required(),
+        status: Joi.number().valid(0, 1).default(1),
+        top_limit: Joi.number().integer().min(1).max(100).default(10),
+      }),
+    },
   },
 
   dashboard: {
@@ -498,12 +576,12 @@ module.exports = {
     },
   },
 
-  // Super admin: set plan merchant manual (FREE/PRO + masa aktif + catatan).
+  // Super admin: set plan merchant manual (FREE/PRO/BUSINESS + masa aktif + catatan).
   merchant: {
     setPlan: {
       params: idParam.params,
       body: Joi.object({
-        plan: Joi.string().valid('FREE', 'PRO').required(),
+        plan: Joi.string().valid('FREE', 'PRO', 'BUSINESS').required(),
         pro_starts_at: Joi.date().iso().allow(null, ''),
         pro_expires_at: Joi.date().iso().allow(null, ''),
         note: Joi.string().max(255).allow('', null),

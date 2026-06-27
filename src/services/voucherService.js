@@ -1,5 +1,6 @@
 const { Voucher } = require('../models');
 const ApiError = require('../utils/ApiError');
+const { assertProFeature } = require('../utils/plan');
 
 // Catatan: voucher kini tersedia untuk SEMUA plan (FREE & PRO). Tetap ter-scope
 // merchant — voucher milik merchant lain tidak bisa dipakai.
@@ -7,6 +8,7 @@ const ApiError = require('../utils/ApiError');
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
 async function list() {
+  await assertProFeature();
   return Voucher.findAll({ order: [['ID', 'DESC']] });
 }
 
@@ -15,6 +17,7 @@ async function getByCode(kode) {
 }
 
 async function create(data) {
+  await assertProFeature();
   const kode = String(data.kode || '').trim().toUpperCase();
   const exists = await getByCode(kode);
   if (exists) throw new ApiError(409, 'Kode voucher sudah dipakai');
@@ -30,6 +33,7 @@ async function create(data) {
 }
 
 async function update(id, data) {
+  await assertProFeature();
   const v = await Voucher.findByPk(id);
   if (!v) throw new ApiError(404, 'Voucher tidak ditemukan');
   const map = {
@@ -47,6 +51,7 @@ async function update(id, data) {
 }
 
 async function remove(id) {
+  await assertProFeature();
   const v = await Voucher.findByPk(id);
   if (!v) throw new ApiError(404, 'Voucher tidak ditemukan');
   await v.destroy();
@@ -59,6 +64,7 @@ async function remove(id) {
  * Dipakai saat checkout dan untuk pratinjau di frontend.
  */
 async function validateForSubtotal(kode, subtotal) {
+  await assertProFeature();
   const v = await getByCode(String(kode || '').trim().toUpperCase());
   if (!v) throw new ApiError(404, 'Kode voucher tidak ditemukan');
   if (!v.IS_ACTIVE) throw new ApiError(400, 'Voucher tidak aktif');

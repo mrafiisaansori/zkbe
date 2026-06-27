@@ -60,26 +60,27 @@ async function sendPasswordResetEmail(toEmail, { otp, name }) {
   return getTransporter().sendMail({ from: FROM, to: toEmail, subject, text, html });
 }
 
-// Email notifikasi langganan PRO aktif setelah diverifikasi super admin.
+// Email notifikasi plan aktif setelah pembayaran Midtrans terkonfirmasi.
 async function sendSubscriptionActivatedEmail(toEmail, { storeName, paket, expiresAt }) {
   const masa = expiresAt ? new Date(expiresAt).toLocaleString('id-ID', { dateStyle: 'long' }) : '-';
-  const subject = `Langganan PRO Aktif - ${env.smtp.fromName}`;
+  const plan = String(paket || 'PRO').split(' ')[0];
+  const subject = `Langganan ${plan} Aktif - ${env.smtp.fromName}`;
   const text =
     `Halo ${storeName || ''},\n\n` +
-    `Pembayaran langganan Anda telah diverifikasi. Toko Anda sekarang berstatus PRO.\n` +
+    `Pembayaran Midtrans telah dikonfirmasi. Toko Anda sekarang berstatus ${plan}.\n` +
     `Paket: ${paket}\nMasa aktif hingga: ${masa}\n\n` +
-    `Nikmati fitur PRO: produk tanpa batas, multi kasir, Open Bill, dan struk tanpa branding.\n` +
+    `Plan aktif otomatis dan dapat langsung digunakan pada aplikasi.\n` +
     `Terima kasih telah berlangganan ${env.smtp.fromName}.`;
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto;color:#1f2937">
-      <h2 style="color:#03045e;margin-bottom:4px">Langganan PRO Aktif 🎉</h2>
+      <h2 style="color:#03045e;margin-bottom:4px">Langganan ${plan} Aktif</h2>
       <p>Halo <b>${storeName || ''}</b>,</p>
-      <p>Pembayaran langganan Anda telah <b>diverifikasi</b>. Toko Anda sekarang berstatus <b>PRO</b>.</p>
+      <p>Pembayaran Midtrans telah <b>dikonfirmasi</b>. Toko Anda sekarang berstatus <b>${plan}</b>.</p>
       <div style="background:#eef2ff;border-radius:12px;padding:14px;margin:14px 0">
         <p style="margin:0">Paket: <b>${paket}</b></p>
         <p style="margin:6px 0 0">Masa aktif hingga: <b>${masa}</b></p>
       </div>
-      <p style="font-size:13px;color:#6b7280">Fitur PRO: produk tanpa batas, multi kasir, Open Bill, struk tanpa branding Zona Kasir.</p>
+      <p style="font-size:13px;color:#6b7280">Plan aktif otomatis dan dapat langsung digunakan pada aplikasi.</p>
       <p>Terima kasih telah berlangganan ${env.smtp.fromName}.</p>
     </div>`;
   return getTransporter().sendMail({ from: FROM, to: toEmail, subject, text, html });

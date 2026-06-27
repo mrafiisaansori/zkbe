@@ -4,3 +4,4 @@ npm-debug.log
 uploads/
 error_log
 *.log
+*migrations

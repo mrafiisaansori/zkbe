@@ -16,9 +16,9 @@ const Merchant = sequelize.define('m_merchant', {
   INVOICE_PREFIX: { type: DataTypes.STRING(15) },   // prefix nomor nota, mis. "TZK"
   SLUG: { type: DataTypes.STRING(80) },             // katalog publik: /store/{slug}
   STATUS: { type: DataTypes.STRING(20), defaultValue: 'active' },
-  PLAN: { type: DataTypes.STRING(10), defaultValue: 'FREE' }, // 'FREE' | 'PRO'
-  PRO_STARTS_AT: { type: DataTypes.DATE },          // tanggal mulai PRO (manual super admin)
-  PRO_EXPIRES_AT: { type: DataTypes.DATE },         // null = belum pernah PRO
+  PLAN: { type: DataTypes.STRING(10), defaultValue: 'FREE' }, // 'FREE' | 'PRO' | 'BUSINESS'
+  PRO_STARTS_AT: { type: DataTypes.DATE },          // tanggal mulai plan berbayar (manual super admin)
+  PRO_EXPIRES_AT: { type: DataTypes.DATE },         // masa aktif plan berbayar (PRO/BUSINESS). null = belum pernah berbayar
   CREATED_AT: { type: DataTypes.DATE },
   UPDATED_AT: { type: DataTypes.DATE },
 }, {

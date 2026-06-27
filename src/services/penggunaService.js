@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { Pengguna, sequelize } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { hashPassword, verifyPassword, generatePassword } = require('../utils/password');
@@ -7,6 +8,9 @@ const { currentPlan, FREE_MAX_KASIR } = require('../utils/plan');
 const PUBLIC_ATTR = ['ID', 'NAMA', 'USERNAME', 'LEVEL', 'TELP'];
 
 const KASIR = 2;
+const GUDANG = 3;
+// Role yang BOLEH dikelola admin merchant: Kasir & Gudang (bukan Admin/Super Admin).
+const MANAGEABLE_LEVELS = [KASIR, GUDANG];
 
 /**
  * Cek apakah username sudah dipakai SECARA GLOBAL (lintas merchant).
@@ -25,9 +29,9 @@ async function usernameTaken(username, exceptId) {
   return true;
 }
 
-// Daftar pengguna: HANYA kasir (LEVEL 2) milik merchant ini. Akun Admin
-// sengaja disembunyikan agar admin merchant tidak menghapus akun admin utama.
-const list = () => Pengguna.findAll({ where: { LEVEL: KASIR }, attributes: PUBLIC_ATTR, order: [['NAMA', 'ASC']] });
+// Daftar pengguna: Kasir (LEVEL 2) & Gudang (LEVEL 3) milik merchant ini. Akun
+// Admin sengaja disembunyikan agar admin merchant tidak menghapus akun admin utama.
+const list = () => Pengguna.findAll({ where: { LEVEL: { [Op.in]: MANAGEABLE_LEVELS } }, attributes: PUBLIC_ATTR, order: [['LEVEL', 'ASC'], ['NAMA', 'ASC']] });
 
 async function getById(id) {
   const u = await Pengguna.findByPk(id, { attributes: PUBLIC_ATTR });
@@ -36,11 +40,17 @@ async function getById(id) {
 }
 
 async function create(data) {
-  // Validasi limit plan FREE: hanya 1 kasir (LEVEL 2). Admin (LEVEL 1) tidak dibatasi.
-  if (Number(data.level) === 2) {
+  // Admin merchant HANYA boleh membuat user Kasir atau Gudang (bukan Admin/Super Admin).
+  // Divalidasi di backend agar tidak bisa di-bypass dari frontend.
+  if (!MANAGEABLE_LEVELS.includes(Number(data.level))) {
+    throw new ApiError(403, 'Role tidak diizinkan. Hanya Kasir atau Gudang yang dapat dibuat.');
+  }
+
+  // Validasi limit plan FREE: hanya 1 kasir (LEVEL 2). Gudang (LEVEL 3) tidak dibatasi.
+  if (Number(data.level) === KASIR) {
     const plan = await currentPlan();
     if (plan === 'FREE') {
-      const jumlahKasir = await Pengguna.count({ where: { LEVEL: 2 } });
+      const jumlahKasir = await Pengguna.count({ where: { LEVEL: KASIR } });
       if (jumlahKasir >= FREE_MAX_KASIR) {
         throw new ApiError(403, `Plan FREE hanya mendukung ${FREE_MAX_KASIR} kasir. Upgrade ke PRO untuk menambahkan multiple kasir.`);
       }
@@ -63,6 +73,13 @@ async function create(data) {
 async function update(id, data) {
   const u = await Pengguna.findByPk(id);
   if (!u) throw new ApiError(404, 'Pengguna tidak ditemukan');
+  // Hanya boleh mengubah akun Kasir/Gudang (bukan akun Admin).
+  if (!MANAGEABLE_LEVELS.includes(Number(u.LEVEL))) {
+    throw new ApiError(403, 'Akun ini tidak dapat diubah dari sini.');
+  }
+  if (data.level !== undefined && !MANAGEABLE_LEVELS.includes(Number(data.level))) {
+    throw new ApiError(403, 'Role tidak diizinkan. Hanya Kasir atau Gudang.');
+  }
   // Bila username diganti, pastikan tetap unik global.
   if (data.username && data.username !== u.USERNAME && await usernameTaken(data.username, u.ID)) {
     throw new ApiError(409, 'Username sudah digunakan, silakan gunakan username lain.');
@@ -79,9 +96,9 @@ async function update(id, data) {
 async function remove(id) {
   const u = await Pengguna.findByPk(id);
   if (!u) throw new ApiError(404, 'Pengguna tidak ditemukan');
-  // Admin merchant TIDAK boleh menghapus akun admin/super admin — hanya kasir.
-  if (Number(u.LEVEL) !== KASIR) {
-    throw new ApiError(403, 'Hanya akun kasir yang dapat dihapus. Akun admin tidak boleh dihapus.');
+  // Admin merchant TIDAK boleh menghapus akun admin/super admin — hanya Kasir/Gudang.
+  if (!MANAGEABLE_LEVELS.includes(Number(u.LEVEL))) {
+    throw new ApiError(403, 'Hanya akun Kasir/Gudang yang dapat dihapus. Akun admin tidak boleh dihapus.');
   }
   await u.destroy();
   return true;

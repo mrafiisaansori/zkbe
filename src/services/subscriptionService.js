@@ -1,36 +1,37 @@
 const { Op } = require('sequelize');
 const {
-  sequelize, SubscriptionSetting, SubscriptionPayment, Merchant, Pengguna,
+  sequelize, SubscriptionSetting, SubscriptionPayment, Merchant, Pengguna, PlanHistory,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
-const { activeMerchantId, getTenant } = require('../utils/tenancy');
+const { activeMerchantId, getTenant, withMerchantScope } = require('../utils/tenancy');
 const { effectivePlan, normalizePlan } = require('../utils/plan');
 const { sendSubscriptionActivatedEmail } = require('../utils/mailer');
+const env = require('../config/env');
+const billingMidtrans = require('./billingMidtransService');
 
-const ACTIVE_STATUS = ['PENDING', 'WAITING_VERIFICATION'];
+const ACTIVE_STATUS = ['PENDING'];
+const FINAL_STATUS = ['PAID', 'EXPIRED', 'CANCELLED', 'FAILED'];
 
-// ===== Pengaturan langganan (global, super admin) =====
 async function getSetting() {
   let row = await SubscriptionSetting.findByPk(1);
   if (!row) row = await SubscriptionSetting.create({ ID: 1 });
   return row;
 }
 
-async function updateSetting(data, imagePath) {
+async function updateSetting(data) {
   const row = await getSetting();
   const map = {
-    QRIS_LABEL: data.qris_label,
     PRICE_MONTHLY: data.price_monthly,
     PRICE_YEARLY: data.price_yearly,
+    PRICE_BUSINESS_MONTHLY: data.price_business_monthly,
+    PRICE_BUSINESS_YEARLY: data.price_business_yearly,
     PAYMENT_TTL_HOURS: data.payment_ttl_hours,
   };
-  if (imagePath) map.QRIS_IMAGE = imagePath;
-  Object.keys(map).forEach((k) => { if (map[k] === undefined) delete map[k]; });
+  Object.keys(map).forEach((key) => { if (map[key] === undefined) delete map[key]; });
   await row.update(map);
   return row;
 }
 
-// Tandai pembayaran yang melewati EXPIRES_AT sebagai EXPIRED (housekeeping lazy).
 async function expireStale() {
   await SubscriptionPayment.update(
     { STATUS: 'EXPIRED' },
@@ -38,65 +39,214 @@ async function expireStale() {
   );
 }
 
-// Generate kode unik 3 digit (100-999) yang TIDAK dipakai pembayaran aktif lain
-// (lintas merchant) karena QRIS yang dipakai adalah open QRIS bersama.
-async function generateUniqueCode() {
-  const [rows] = await sequelize.query(
-    `SELECT KODE_UNIK FROM m_subscription_payment
-     WHERE STATUS IN ('PENDING','WAITING_VERIFICATION') AND EXPIRES_AT > NOW()`,
-  );
-  const used = new Set((rows || []).map((r) => Number(r.KODE_UNIK)));
-  if (used.size >= 900) throw new ApiError(503, 'Sistem sibuk, coba lagi nanti.');
-  let code;
-  do { code = 100 + Math.floor(Math.random() * 900); } while (used.has(code));
-  return code;
+function packagePrice(setting, targetPlan, paket) {
+  if (targetPlan === 'BUSINESS') {
+    return paket === 'TAHUNAN'
+      ? Number(setting.PRICE_BUSINESS_YEARLY)
+      : Number(setting.PRICE_BUSINESS_MONTHLY);
+  }
+  return paket === 'TAHUNAN' ? Number(setting.PRICE_YEARLY) : Number(setting.PRICE_MONTHLY);
 }
 
-// ===== Merchant: buat pembayaran langganan =====
-async function createPayment({ paket }) {
-  await expireStale();
-  const setting = await getSetting();
-  const harga = paket === 'TAHUNAN' ? Number(setting.PRICE_YEARLY) : Number(setting.PRICE_MONTHLY);
-  if (!harga || harga <= 0) throw new ApiError(400, 'Harga paket belum diatur oleh admin Zona Kasir.');
+function durationMonths(paket) {
+  return paket === 'TAHUNAN' ? 12 : 1;
+}
 
-  // Cegah pembayaran ganda yang masih aktif.
-  const aktif = await SubscriptionPayment.findOne({ where: { STATUS: { [Op.in]: ACTIVE_STATUS } } });
-  if (aktif) throw new ApiError(409, 'Masih ada pembayaran langganan yang menunggu. Selesaikan atau batalkan dulu.');
+function parseGatewayExpiry(value, fallbackHours) {
+  if (value) {
+    const normalized = String(value).trim().replace(' ', 'T').replace(/ ([+-]\d{4})$/, '$1');
+    const parsed = new Date(normalized);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date(Date.now() + fallbackHours * 3600 * 1000);
+}
 
-  const code = await generateUniqueCode();
-  const ttlH = Number(setting.PAYMENT_TTL_HOURS || 24);
-  const { userId } = getTenant();
+function extendExpiry(current, months) {
+  const now = new Date();
+  const base = current && new Date(current) > now ? new Date(current) : now;
+  base.setMonth(base.getMonth() + Number(months || 1));
+  return base;
+}
 
-  const row = await SubscriptionPayment.create({
-    PAKET: paket,
-    HARGA: harga,
-    KODE_UNIK: code,
-    TOTAL_BAYAR: harga + code,
-    STATUS: 'PENDING',
-    EXPIRES_AT: new Date(Date.now() + ttlH * 3600 * 1000),
-    ID_USER: userId ?? null,
+async function activatePayment(paymentId, rawPayload, transactionId) {
+  return sequelize.transaction(async (transaction) => {
+    const row = await SubscriptionPayment.findByPk(paymentId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!row) throw new ApiError(404, 'Pembayaran billing tidak ditemukan.');
+    if (row.STATUS === 'PAID') return row;
+
+    const merchant = await Merchant.findByPk(row.MERCHANT_ID, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!merchant) throw new ApiError(404, 'Merchant pembayaran tidak ditemukan.');
+
+    const targetPlan = row.TARGET_PLAN === 'BUSINESS' ? 'BUSINESS' : 'PRO';
+    const startsAt = new Date();
+    const newExpiry = extendExpiry(merchant.PRO_EXPIRES_AT, row.DURATION_MONTHS);
+    const oldPlan = effectivePlan(merchant);
+
+    await merchant.update({
+      PLAN: targetPlan,
+      PRO_STARTS_AT: startsAt,
+      PRO_EXPIRES_AT: newExpiry,
+    }, { transaction });
+
+    await row.update({
+      STATUS: 'PAID',
+      PAID_AT: startsAt,
+      VERIFIED_AT: startsAt,
+      VERIFIED_BY: null,
+      ACTIVATED_AT: startsAt,
+      MIDTRANS_TRANSACTION_ID: transactionId || row.MIDTRANS_TRANSACTION_ID,
+      LAST_NOTIFICATION: rawPayload ? JSON.stringify(rawPayload) : row.LAST_NOTIFICATION,
+      REJECT_REASON: null,
+    }, { transaction });
+
+    await PlanHistory.create({
+      MERCHANT_ID: merchant.ID,
+      OLD_PLAN: oldPlan,
+      NEW_PLAN: targetPlan,
+      PRO_STARTS_AT: startsAt,
+      PRO_EXPIRES_AT: newExpiry,
+      NOTE: `Aktivasi otomatis dari pembayaran ${row.MIDTRANS_ORDER_ID}`,
+      SOURCE: 'PAYMENT',
+      CHANGED_BY: null,
+    }, { transaction });
+
+    transaction.afterCommit(() => {
+      if (merchant.EMAIL) {
+        sendSubscriptionActivatedEmail(merchant.EMAIL, {
+          storeName: merchant.NAMA,
+          paket: `${targetPlan} ${row.PAKET}`,
+          expiresAt: newExpiry,
+        }).catch(() => {});
+      }
+    });
+
+    return row;
+  });
+}
+
+async function applyGatewayStatus(row, status, rawPayload, transactionId) {
+  if (row.STATUS === 'PAID') return row;
+  if (status === 'PAID') return activatePayment(row.ID, rawPayload, transactionId);
+  if (!FINAL_STATUS.includes(status) && status !== 'PENDING') return row;
+
+  await row.update({
+    STATUS: status,
+    MIDTRANS_TRANSACTION_ID: transactionId || row.MIDTRANS_TRANSACTION_ID,
+    LAST_NOTIFICATION: rawPayload ? JSON.stringify(rawPayload) : row.LAST_NOTIFICATION,
+    REJECT_REASON: status === 'FAILED' ? 'Pembayaran ditolak atau gagal di Midtrans.' : null,
   });
   return row;
 }
 
-// Merchant submit / upload bukti -> WAITING_VERIFICATION.
-async function submitPayment(id, buktiPath) {
-  const row = await SubscriptionPayment.findByPk(id); // ter-scope merchant
-  if (!row) throw new ApiError(404, 'Pembayaran tidak ditemukan');
-  if (row.STATUS !== 'PENDING') throw new ApiError(400, `Pembayaran berstatus ${row.STATUS} tidak dapat disubmit`);
-  if (row.EXPIRES_AT && new Date(row.EXPIRES_AT) < new Date()) {
-    await row.update({ STATUS: 'EXPIRED' });
-    throw new ApiError(400, 'Waktu pembayaran sudah habis. Buat pembayaran baru.');
+async function createPayment({ plan, paket }) {
+  await expireStale();
+  const merchantId = activeMerchantId();
+  if (!merchantId) throw new ApiError(403, 'Pembayaran upgrade hanya dapat dibuat oleh merchant login.');
+  if (plan === 'BUSINESS') {
+    throw new ApiError(422, 'Untuk upgrade atau perpanjang paket BUSINESS, hubungi kami melalui WhatsApp +62 859-1069-97680.');
   }
-  await row.update({ STATUS: 'WAITING_VERIFICATION', BUKTI: buktiPath || row.BUKTI, PAID_AT: new Date() });
-  return row;
+
+  const setting = await getSetting();
+  const targetPlan = plan === 'BUSINESS' ? 'BUSINESS' : 'PRO';
+  const price = packagePrice(setting, targetPlan, paket);
+  if (!price || price <= 0) throw new ApiError(400, `Harga ${targetPlan} ${paket.toLowerCase()} belum diatur.`);
+
+  const active = await SubscriptionPayment.findOne({ where: { STATUS: { [Op.in]: ACTIVE_STATUS } } });
+  if (active) throw new ApiError(409, 'Masih ada pembayaran upgrade yang menunggu. Selesaikan atau tunggu kedaluwarsa.');
+
+  // Memvalidasi seluruh ENV billing sebelum membuat row pembayaran.
+  billingMidtrans.gatewaySetting();
+  const ttlHours = Number(setting.PAYMENT_TTL_HOURS || 24);
+  const { userId } = getTenant();
+  const merchant = await Merchant.findByPk(merchantId);
+
+  const row = await SubscriptionPayment.create({
+    PAKET: paket,
+    TARGET_PLAN: targetPlan,
+    DURATION_MONTHS: durationMonths(paket),
+    HARGA: price,
+    KODE_UNIK: 0,
+    TOTAL_BAYAR: price,
+    STATUS: 'PENDING',
+    PROVIDER: 'midtrans',
+    GATEWAY_MERCHANT_ID: env.billingMidtrans.merchantId,
+    EXPIRES_AT: new Date(Date.now() + ttlHours * 3600 * 1000),
+    ID_USER: userId ?? null,
+  });
+
+  const orderId = billingMidtrans.buildOrderId(merchantId, row.ID);
+  await row.update({ MIDTRANS_ORDER_ID: orderId });
+
+  try {
+    const charge = await billingMidtrans.chargeQris({
+      orderId,
+      grossAmount: price,
+      customerName: merchant ? merchant.NAMA : undefined,
+    });
+    await row.update({
+      MIDTRANS_TRANSACTION_ID: charge.transactionId,
+      QR_STRING: charge.qrString,
+      QR_URL: charge.qrUrl,
+      EXPIRES_AT: parseGatewayExpiry(charge.expiryTime, ttlHours),
+      RAW_RESPONSE: JSON.stringify(charge.raw),
+    });
+    return row;
+  } catch (error) {
+    await row.update({
+      STATUS: 'FAILED',
+      REJECT_REASON: error.message || 'Gagal membuat QRIS Midtrans.',
+      RAW_RESPONSE: JSON.stringify(error.raw || { message: error.message }),
+    });
+    throw error;
+  }
 }
 
-// Merchant: status billing (plan, masa aktif, riwayat).
+async function getPaymentStatus(id) {
+  await expireStale();
+  let row = await SubscriptionPayment.findByPk(id);
+  if (!row) throw new ApiError(404, 'Pembayaran tidak ditemukan.');
+  if (row.PROVIDER !== 'midtrans' || FINAL_STATUS.includes(row.STATUS) || !row.MIDTRANS_ORDER_ID) return row;
+
+  const fresh = await billingMidtrans.getStatus(row.MIDTRANS_ORDER_ID);
+  if (fresh && fresh.transactionStatus) {
+    const mapped = billingMidtrans.mapStatus(fresh.transactionStatus, fresh.fraudStatus);
+    row = await applyGatewayStatus(row, mapped, fresh.raw, fresh.transactionId);
+  }
+  return SubscriptionPayment.findByPk(row.ID);
+}
+
+async function handleNotification(body) {
+  const parsed = billingMidtrans.parseOrderId(body.order_id);
+  if (!parsed) throw new ApiError(400, 'order_id billing tidak valid.');
+
+  const signatureValid = billingMidtrans.verifySignature({
+    orderId: body.order_id,
+    statusCode: body.status_code,
+    grossAmount: body.gross_amount,
+    signatureKey: body.signature_key,
+  });
+  if (!signatureValid) throw new ApiError(403, 'Signature Midtrans billing tidak valid.');
+
+  return withMerchantScope(parsed.merchantId, async () => {
+    const row = await SubscriptionPayment.findOne({ where: { ID: parsed.paymentId, MIDTRANS_ORDER_ID: body.order_id } });
+    if (!row || row.MERCHANT_ID !== parsed.merchantId) throw new ApiError(404, 'Pembayaran billing tidak ditemukan.');
+
+    const mapped = billingMidtrans.mapStatus(body.transaction_status, body.fraud_status);
+    await applyGatewayStatus(row, mapped, body, body.transaction_id);
+    return { order_id: body.order_id, payment_status: mapped };
+  });
+}
+
 async function billing() {
   await expireStale();
-  const mid = activeMerchantId();
-  const merchant = mid ? await Merchant.findByPk(mid) : null;
+  const merchantId = activeMerchantId();
+  const merchant = merchantId ? await Merchant.findByPk(merchantId) : null;
   if (merchant) await normalizePlan(merchant);
   const payments = await SubscriptionPayment.findAll({ order: [['ID', 'DESC']] });
   return {
@@ -108,17 +258,10 @@ async function billing() {
   };
 }
 
-async function listOwnPayments() {
-  await expireStale();
-  return SubscriptionPayment.findAll({ order: [['ID', 'DESC']] });
-}
-
-// ===== Super admin =====
 async function listAllPayments({ status } = {}) {
   await expireStale();
   const where = {};
   if (status) where.STATUS = status;
-  // Super admin: tidak ter-scope (lihat semua merchant).
   return SubscriptionPayment.findAll({
     where,
     include: [{ model: Merchant, as: 'merchant', attributes: ['ID', 'NAMA', 'EMAIL', 'PLAN', 'PRO_EXPIRES_AT'] }],
@@ -133,53 +276,17 @@ async function getPaymentAdmin(id) {
       { model: Pengguna, as: 'pemohon', attributes: ['ID', 'NAMA'] },
     ],
   });
-  if (!row) throw new ApiError(404, 'Pembayaran tidak ditemukan');
-  return row;
-}
-
-// Tambah masa aktif: 1 bulan / 1 tahun dari max(now, masa aktif sekarang).
-function extendExpiry(current, paket) {
-  const base = current && new Date(current) > new Date() ? new Date(current) : new Date();
-  if (paket === 'TAHUNAN') base.setFullYear(base.getFullYear() + 1);
-  else base.setMonth(base.getMonth() + 1);
-  return base;
-}
-
-async function verifyPayment(id, adminId) {
-  return sequelize.transaction(async (t) => {
-    const row = await SubscriptionPayment.findByPk(id, { transaction: t });
-    if (!row) throw new ApiError(404, 'Pembayaran tidak ditemukan');
-    if (row.STATUS === 'VERIFIED') throw new ApiError(400, 'Pembayaran sudah diverifikasi');
-
-    const merchant = await Merchant.findByPk(row.MERCHANT_ID, { transaction: t });
-    if (!merchant) throw new ApiError(404, 'Merchant tidak ditemukan');
-
-    const newExpiry = extendExpiry(merchant.PRO_EXPIRES_AT, row.PAKET);
-    await merchant.update({ PLAN: 'PRO', PRO_EXPIRES_AT: newExpiry }, { transaction: t });
-    await row.update({
-      STATUS: 'VERIFIED', VERIFIED_AT: new Date(), VERIFIED_BY: adminId, REJECT_REASON: null,
-    }, { transaction: t });
-
-    // Kirim email konfirmasi PRO aktif ke merchant (best-effort, di luar jalur gagal).
-    if (merchant.EMAIL) {
-      sendSubscriptionActivatedEmail(merchant.EMAIL, {
-        storeName: merchant.NAMA, paket: row.PAKET, expiresAt: newExpiry,
-      }).catch(() => {});
-    }
-    return { payment: row, pro_expires_at: newExpiry };
-  });
-}
-
-async function rejectPayment(id, reason) {
-  const row = await SubscriptionPayment.findByPk(id);
-  if (!row) throw new ApiError(404, 'Pembayaran tidak ditemukan');
-  if (row.STATUS === 'VERIFIED') throw new ApiError(400, 'Pembayaran sudah diverifikasi, tidak bisa ditolak');
-  await row.update({ STATUS: 'REJECTED', REJECT_REASON: reason || 'Pembayaran ditolak' });
+  if (!row) throw new ApiError(404, 'Pembayaran tidak ditemukan.');
   return row;
 }
 
 module.exports = {
-  getSetting, updateSetting,
-  createPayment, submitPayment, billing, listOwnPayments,
-  listAllPayments, getPaymentAdmin, verifyPayment, rejectPayment,
+  getSetting,
+  updateSetting,
+  createPayment,
+  getPaymentStatus,
+  handleNotification,
+  billing,
+  listAllPayments,
+  getPaymentAdmin,
 };

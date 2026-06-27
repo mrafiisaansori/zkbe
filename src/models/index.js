@@ -26,6 +26,9 @@ const ModifierOption = require('./ModifierOption');
 const ProdukModifier = require('./ProdukModifier');
 const SubscriptionSetting = require('./SubscriptionSetting');
 const SubscriptionPayment = require('./SubscriptionPayment');
+const PaymentGatewaySetting = require('./PaymentGatewaySetting');
+const PaymentLog = require('./PaymentLog');
+const PaymentWebhookLog = require('./PaymentWebhookLog');
 const Merchant = require('./Merchant');
 const RegistrationOtp = require('./RegistrationOtp');
 const PasswordResetOtp = require('./PasswordResetOtp');
@@ -33,6 +36,9 @@ const EmailChangeOtp = require('./EmailChangeOtp');
 const PlanHistory = require('./PlanHistory');
 const Provinsi = require('./Provinsi');
 const Kota = require('./Kota');
+const KasShift = require('./KasShift');
+const KasShiftDetail = require('./KasShiftDetail');
+const KasMutasi = require('./KasMutasi');
 const { scopeModel } = require('../utils/tenancy');
 
 // ===== Associations (mengikuti relasi di view_* dari DB existing) =====
@@ -84,11 +90,24 @@ ProdukModifier.belongsTo(ModifierGroup, { foreignKey: 'ID_GROUP', targetKey: 'ID
 SubscriptionPayment.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
 SubscriptionPayment.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'pemohon' });
 
+// ===== Payment Gateway (Midtrans) =====
+PaymentLog.belongsTo(Penjualan, { foreignKey: 'ID_PENJUALAN', targetKey: 'ID', as: 'penjualan' });
+
 // ===== Multi-tenant: relasi ke Merchant =====
 Merchant.hasMany(Pengguna, { foreignKey: 'MERCHANT_ID', sourceKey: 'ID', as: 'pengguna' });
 Pengguna.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
 Merchant.hasMany(Penjualan, { foreignKey: 'MERCHANT_ID', sourceKey: 'ID', as: 'penjualan' });
 Penjualan.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
+
+// ===== Closing / Sesi Kas (Shift) =====
+KasShift.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'kasir' });
+KasShift.hasMany(KasShiftDetail, { foreignKey: 'ID_SHIFT', sourceKey: 'ID', as: 'detail' });
+KasShift.hasMany(KasMutasi, { foreignKey: 'ID_SHIFT', sourceKey: 'ID', as: 'mutasi' });
+KasShiftDetail.belongsTo(KasShift, { foreignKey: 'ID_SHIFT', targetKey: 'ID', as: 'shift' });
+KasShiftDetail.belongsTo(JenisBayar, { foreignKey: 'ID_JENIS_BAYAR', targetKey: 'ID', as: 'jenisBayar' });
+KasMutasi.belongsTo(KasShift, { foreignKey: 'ID_SHIFT', targetKey: 'ID', as: 'shift' });
+Penjualan.belongsTo(KasShift, { foreignKey: 'ID_SHIFT', targetKey: 'ID', as: 'shift' });
+KasShift.hasMany(Penjualan, { foreignKey: 'ID_SHIFT', sourceKey: 'ID', as: 'penjualan' });
 
 // ===== Tenant scoping otomatis =====
 // Setiap model di bawah ini WAJIB ter-filter berdasarkan merchant_id (dari JWT),
@@ -100,9 +119,13 @@ Penjualan.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 
   OpenBill, OpenBillDetail,
   TaxSetting, Voucher, SubscriptionPayment, Meja,
   ModifierGroup, ModifierOption, ProdukModifier,
+  PaymentGatewaySetting, PaymentLog,
+  KasShift, KasShiftDetail, KasMutasi,
 ].forEach((m) => scopeModel(m));
 // Catatan: Merchant, RegistrationOtp, SubscriptionSetting TIDAK di-scope
 // (dikelola super admin / global / alur publik).
+// PaymentWebhookLog TIDAK di-scope: webhook Midtrans publik tanpa konteks tenant;
+// MERCHANT_ID diisi eksplisit dari hasil parse order_id setelah signature valid.
 
 module.exports = {
   sequelize,
@@ -112,5 +135,7 @@ module.exports = {
   OpenBill, OpenBillDetail,
   TaxSetting, Voucher, SubscriptionSetting, SubscriptionPayment, Meja,
   ModifierGroup, ModifierOption, ProdukModifier,
+  PaymentGatewaySetting, PaymentLog, PaymentWebhookLog,
   Merchant, RegistrationOtp, PasswordResetOtp, EmailChangeOtp, PlanHistory, Provinsi, Kota,
+  KasShift, KasShiftDetail, KasMutasi,
 };

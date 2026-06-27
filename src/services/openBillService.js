@@ -4,14 +4,14 @@ const {
 } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { activeMerchantId } = require('../utils/tenancy');
-const { currentPlan } = require('../utils/plan');
+const { currentPlan, hasProFeatures } = require('../utils/plan');
 const penjualanService = require('./penjualanService');
 const modifierService = require('./modifierService');
 
-// Open Bill hanya untuk plan PRO. Divalidasi di backend (bukan sekadar UI).
+// Open Bill hanya untuk plan PRO/BUSINESS. Divalidasi di backend (bukan sekadar UI).
 async function assertPro() {
   const plan = await currentPlan();
-  if (plan !== 'PRO') {
+  if (!hasProFeatures(plan)) {
     throw new ApiError(403, 'Fitur Open Bill hanya tersedia di plan PRO. Upgrade ke PRO untuk menggunakannya.');
   }
 }

@@ -2,6 +2,10 @@ const router = require('express').Router();
 const ctrl = require('../controllers/jenisBayarController');
 const validate = require('../middlewares/validate');
 const v = require('../validations');
+const { forbidGudang } = require('../middlewares/role');
+
+// Metode pembayaran = Pengaturan, bukan akses Gudang.
+router.use(forbidGudang);
 
 /**
  * @swagger

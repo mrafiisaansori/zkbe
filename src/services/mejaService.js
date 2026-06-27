@@ -1,12 +1,12 @@
 const crypto = require('crypto');
 const { Meja } = require('../models');
 const ApiError = require('../utils/ApiError');
-const { currentPlan } = require('../utils/plan');
+const { currentPlan, hasProFeatures } = require('../utils/plan');
 
-// QR Menu / meja hanya untuk plan PRO. Divalidasi di backend.
+// QR Menu / meja hanya untuk plan PRO/BUSINESS. Divalidasi di backend.
 async function assertPro() {
   const plan = await currentPlan();
-  if (plan !== 'PRO') {
+  if (!hasProFeatures(plan)) {
     throw new ApiError(403, 'Fitur QR Menu & Self Order hanya tersedia di plan PRO. Upgrade ke PRO untuk menggunakannya.');
   }
 }

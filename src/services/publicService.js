@@ -3,7 +3,7 @@ const {
   sequelize, Meja, Merchant, Identitas, Produk, Kategori, OpenBill, OpenBillDetail,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
-const { effectivePlan } = require('../utils/plan');
+const { effectivePlan, hasProFeatures } = require('../utils/plan');
 const { buildBaseUrl } = require('../utils/fileUrl');
 const env = require('../config/env');
 
@@ -51,7 +51,7 @@ async function getMenu(token, req) {
   if (!meja) throw new ApiError(404, 'Menu tidak ditemukan atau sudah nonaktif.');
   const merchant = await Merchant.findByPk(meja.MERCHANT_ID);
   if (!merchant || merchant.STATUS !== 'active') throw new ApiError(404, 'Toko tidak aktif.');
-  if (effectivePlan(merchant) !== 'PRO') throw new ApiError(403, 'Menu digital tidak tersedia.');
+  if (!hasProFeatures(effectivePlan(merchant))) throw new ApiError(403, 'Menu digital tidak tersedia.');
 
   const store = await loadStoreData(merchant.ID, req);
   return { meja: { id: meja.ID, nomor: meja.NOMOR }, merchant: { id: merchant.ID, nama: merchant.NAMA }, ...store };
@@ -63,7 +63,7 @@ async function createOrder(token, { items, customer_name, note }, req) {
   if (!meja) throw new ApiError(404, 'Menu tidak ditemukan.');
   const merchant = await Merchant.findByPk(meja.MERCHANT_ID);
   if (!merchant || merchant.STATUS !== 'active') throw new ApiError(404, 'Toko tidak aktif.');
-  if (effectivePlan(merchant) !== 'PRO') throw new ApiError(403, 'Pemesanan tidak tersedia.');
+  if (!hasProFeatures(effectivePlan(merchant))) throw new ApiError(403, 'Pemesanan tidak tersedia.');
   if (!items || !items.length) throw new ApiError(400, 'Pesanan kosong.');
 
   const merchantId = merchant.ID;

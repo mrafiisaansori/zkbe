@@ -46,4 +46,22 @@ module.exports = {
   turnstile: {
     secret: process.env.TURNSTILE_SECRET_KEY || '',
   },
+  // Midtrans payment gateway (QRIS dinamis) - KHUSUS merchant plan BUSINESS.
+  // SERVER_KEY hanya dipakai di backend (charge + verifikasi signature webhook).
+  // CLIENT_KEY boleh dikirim ke frontend bila perlu. JANGAN hardcode nilai asli
+  // di repo — isi di .env server. Default isProduction=false (sandbox/demo).
+  midtrans: {
+    merchantId: process.env.MIDTRANS_MERCHANT_ID || '',
+    clientKey: process.env.MIDTRANS_CLIENT_KEY || '',
+    serverKey: process.env.MIDTRANS_SERVER_KEY || '',
+    isProduction: String(process.env.MIDTRANS_IS_PRODUCTION || 'false') === 'true',
+  },
+  // Akun Midtrans khusus penagihan upgrade plan. Dipisahkan dari gateway
+  // transaksi POS merchant agar settlement dan webhook tidak bercampur.
+  billingMidtrans: {
+    merchantId: process.env.BILLING_MIDTRANS_UPGRADE_PLAN_MERCHANT_ID || '',
+    clientKey: process.env.BILLING_MIDTRANS_UPGRADE_PLAN_CLIENT_KEY || '',
+    serverKey: process.env.BILLING_MIDTRANS_UPGRADE_PLAN_SERVER_KEY || '',
+    isProduction: String(process.env.BILLING_MIDTRANS_UPGRADE_PLAN_IS_PRODUCTION || 'false') === 'true',
+  },
 };

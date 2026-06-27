@@ -14,11 +14,6 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 const QRIS_DIR = path.join(__dirname, '../../uploads/qris');
 if (!fs.existsSync(QRIS_DIR)) fs.mkdirSync(QRIS_DIR, { recursive: true });
 
-// QRIS langganan Zona Kasir (super admin) & bukti bayar langganan (merchant).
-const SUBS_DIR = path.join(__dirname, '../../uploads/subscription');
-if (!fs.existsSync(SUBS_DIR)) fs.mkdirSync(SUBS_DIR, { recursive: true });
-const PROOF_DIR = path.join(__dirname, '../../uploads/proof');
-if (!fs.existsSync(PROOF_DIR)) fs.mkdirSync(PROOF_DIR, { recursive: true });
 const BANNER_DIR = path.join(__dirname, '../../uploads/banner');
 if (!fs.existsSync(BANNER_DIR)) fs.mkdirSync(BANNER_DIR, { recursive: true });
 const LOGO_DIR = path.join(__dirname, '../../uploads/logo');
@@ -43,8 +38,6 @@ function makeStorage(dir, prefix) {
 
 const productUpload = multer({ storage: makeStorage(UPLOAD_DIR, 'produk'), fileFilter, limits: { fileSize: MAX_SIZE } });
 const qrisUpload = multer({ storage: makeStorage(QRIS_DIR, 'qris'), fileFilter, limits: { fileSize: MAX_SIZE } });
-const subsUpload = multer({ storage: makeStorage(SUBS_DIR, 'subsqris'), fileFilter, limits: { fileSize: MAX_SIZE } });
-const proofUpload = multer({ storage: makeStorage(PROOF_DIR, 'proof'), fileFilter, limits: { fileSize: MAX_SIZE } });
 
 // Import produk (Excel/CSV) -> memory storage agar bisa di-parse langsung.
 const IMPORT_MIME = [
@@ -83,14 +76,6 @@ function uploadQrisImage(fieldName = 'image') {
   return wrapSingle(qrisUpload, fieldName);
 }
 
-function uploadSubscriptionQris(fieldName = 'image') {
-  return wrapSingle(subsUpload, fieldName);
-}
-
-function uploadPaymentProof(fieldName = 'bukti') {
-  return wrapSingle(proofUpload, fieldName);
-}
-
 function uploadImportFile(fieldName = 'file') {
   return wrapSingle(importUpload, fieldName);
 }
@@ -106,7 +91,7 @@ function uploadLogoImage(fieldName = 'logo') {
 }
 
 module.exports = {
-  uploadProductImage, uploadQrisImage, uploadSubscriptionQris, uploadPaymentProof,
+  uploadProductImage, uploadQrisImage,
   uploadImportFile, uploadBannerImage, uploadLogoImage,
-  UPLOAD_DIR, QRIS_DIR, SUBS_DIR, PROOF_DIR, BANNER_DIR, LOGO_DIR,
+  UPLOAD_DIR, QRIS_DIR, BANNER_DIR, LOGO_DIR,
 };

@@ -41,6 +41,11 @@ app.use('/api/wilayah', publicWilayahRoutes);
 // QR Menu & Katalog PUBLIK (tanpa JWT). merchant_id diturunkan dari token/slug di server.
 app.use('/api/public', require('./routes/public.routes'));
 
+// Webhook/notification Midtrans PUBLIK (tanpa JWT). Keamanan via signature.
+// HARUS di-mount SEBELUM authJwt agar tidak ditolak 401. merchant_id dari order_id.
+app.use('/api/payments', require('./routes/paymentPublic.routes'));
+app.use('/api/subscription', require('./routes/subscriptionPublic.routes'));
+
 // Seluruh API lain dilindungi JWT (identitas + merchant_id diambil dari token).
 app.use('/api', authJwt, routes);
 

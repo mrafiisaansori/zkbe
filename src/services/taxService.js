@@ -1,4 +1,5 @@
 const { TaxSetting } = require('../models');
+const { assertProFeature } = require('../utils/plan');
 
 // Pengaturan pajak per merchant (1 baris, di-scope otomatis lewat hook tenant).
 async function get() {
@@ -9,6 +10,7 @@ async function get() {
 
 // data: { ppn_enabled, ppn_persen, service_enabled, service_persen }
 async function update(data) {
+  await assertProFeature();
   const row = await get();
   const map = {
     PPN_ENABLED: data.ppn_enabled,

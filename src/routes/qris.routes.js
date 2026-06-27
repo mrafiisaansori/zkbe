@@ -4,6 +4,10 @@ const validate = require('../middlewares/validate');
 const { uploadQrisImage } = require('../middlewares/upload');
 const tenantContext = require('../middlewares/tenantContext');
 const v = require('../validations');
+const { forbidGudang } = require('../middlewares/role');
+
+// Pengaturan QRIS = bagian Pengaturan pembayaran, bukan akses Gudang.
+router.use(forbidGudang);
 
 /**
  * @swagger

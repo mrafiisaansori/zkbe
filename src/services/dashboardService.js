@@ -1,9 +1,10 @@
 const { Op, literal } = require('sequelize');
 const {
-  Penjualan, DetailPenjualan, Produk, Pengguna,
+  Penjualan, DetailPenjualan, Produk, Pengguna, RekamStok, Pembelian, Retur, Supplier,
 } = require('../models');
 const { todayDate } = require('../utils/helpers');
 const { activeMerchantId } = require('../utils/tenancy');
+const { LOW_STOCK_THRESHOLD, LOW_STOCK_LIMIT, LOW_STOCK_ORDER } = require('../utils/inventory');
 
 // PENTING: Sequelize sum()/aggregate TIDAK memicu hook scoping tenant
 // (beda dengan find & count). Jadi merchant_id WAJIB disisipkan manual ke
@@ -39,10 +40,10 @@ async function summary() {
     Produk.count(),
     Pengguna.count(),
     Produk.findAll({
-      where: { STOK: { [Op.lte]: 10 } },
+      where: { STOK: { [Op.lte]: LOW_STOCK_THRESHOLD } },
       attributes: ['ID', 'NAMA', 'STOK'],
-      order: [['STOK', 'ASC']],
-      limit: 10,
+      order: LOW_STOCK_ORDER,
+      limit: LOW_STOCK_LIMIT,
     }),
   ]);
 
@@ -162,4 +163,69 @@ async function chartTahunan(tahun) {
   return { tahun: selectedYear, data };
 }
 
-module.exports = { summary, chartTahunan };
+/**
+ * Dashboard OPERASIONAL untuk role Gudang. SENGAJA tidak memuat data keuangan
+ * (omzet, laba, PPN, service charge, penerimaan bruto). Hanya informasi stok &
+ * operasional. Semua query otomatis ter-scope merchant_id (find/count hook).
+ */
+async function gudangSummary() {
+  const [
+    totalProduk,
+    stokMenipis,
+    stokMenipisCount,
+    produkHabis,
+    produkHabisCount,
+    riwayatStok,
+    pembelianTerbaru,
+    returTerbaru,
+    transaksiTerbaru,
+  ] = await Promise.all([
+    Produk.count(),
+    Produk.findAll({
+      where: { STOK: { [Op.gt]: 0, [Op.lte]: LOW_STOCK_THRESHOLD } },
+      attributes: ['ID', 'NAMA', 'STOK'], order: LOW_STOCK_ORDER, limit: LOW_STOCK_LIMIT,
+    }),
+    Produk.count({ where: { STOK: { [Op.gt]: 0, [Op.lte]: LOW_STOCK_THRESHOLD } } }),
+    Produk.findAll({
+      where: { STOK: { [Op.lte]: 0 } },
+      attributes: ['ID', 'NAMA', 'STOK'], order: [['NAMA', 'ASC']], limit: LOW_STOCK_LIMIT,
+    }),
+    Produk.count({ where: { STOK: { [Op.lte]: 0 } } }),
+    RekamStok.findAll({
+      attributes: ['ID', 'JENIS', 'QTY', 'TANGGAL', 'KETERANGAN'],
+      include: [{ model: Produk, as: 'produk', attributes: ['ID', 'NAMA'] }],
+      order: [['ID', 'DESC']], limit: 8,
+    }),
+    Pembelian.findAll({
+      attributes: ['ID', 'NO_NOTA', 'TANGGAL', 'STATUS'],
+      include: [{ model: Supplier, as: 'supplier', attributes: ['ID', 'NAMA'] }],
+      order: [['ID', 'DESC']], limit: 5,
+    }),
+    Retur.findAll({
+      attributes: ['ID', 'NO_NOTA', 'TANGGAL', 'STATUS'],
+      include: [{ model: Supplier, as: 'supplier', attributes: ['ID', 'NAMA'] }],
+      order: [['ID', 'DESC']], limit: 5,
+    }),
+    Penjualan.findAll({
+      where: { STATUS: 1 },
+      attributes: ['ID', 'TANGGAL', 'JAM'], // tanpa TOTAL/laba — info keuangan disembunyikan
+      include: [{ model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] }],
+      order: [['ID', 'DESC']], limit: 5,
+    }),
+  ]);
+
+  return {
+    tanggal: todayDate(),
+    total_produk: totalProduk,
+    stok_menipis_count: stokMenipisCount,
+    produk_habis_count: produkHabisCount,
+    stok_menipis: stokMenipis,
+    produk_habis: produkHabis,
+    riwayat_stok: riwayatStok,
+    pembelian_terbaru: pembelianTerbaru,
+    retur_terbaru: returTerbaru,
+    transaksi_terbaru: transaksiTerbaru,
+  };
+}
+
+module.exports = { summary, chartTahunan, gudangSummary };
