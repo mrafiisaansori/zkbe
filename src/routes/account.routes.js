@@ -15,4 +15,7 @@ router.post('/email/request', requireRole(ADMIN), validate(v.account.emailReques
 router.post('/email/verify', requireRole(ADMIN), validate(v.account.emailVerify), ctrl.verifyEmail);
 router.post('/email/resend', requireRole(ADMIN), ctrl.resendEmail);
 
+// Tandai onboarding selesai/di-skip (admin merchant).
+router.post('/onboarding-done', requireRole(ADMIN), ctrl.onboardingDone);
+
 module.exports = router;

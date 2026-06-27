@@ -3,6 +3,7 @@ const {
   sequelize, Retur, DetailRetur, Produk, Supplier, Pengguna, Pembelian, DetailPembelian, RekamStok,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
+const { parsePagination, paginated } = require('../utils/pagination');
 
 // STATUS: 0=DRAFT, 1=SELESAI, 2=DIBATALKAN
 const STATUS = { DRAFT: 0, SELESAI: 1, DIBATALKAN: 2 };
@@ -12,13 +13,24 @@ const includeHeader = [
   { model: Supplier, as: 'supplier', attributes: ['ID', 'NAMA'] },
   { model: Pembelian, as: 'pembelian', attributes: ['ID', 'NO_NOTA'] },
 ];
+const LIST_ATTRIBUTES = ['ID', 'NO_NOTA', 'TANGGAL', 'ID_USER', 'ID_SUPPLIER', 'ID_PEMBELIAN', 'STATUS', 'CATATAN'];
 
-async function list({ status, tanggal_awal, tanggal_akhir, search } = {}) {
+async function list({ status, tanggal_awal, tanggal_akhir, search, page, limit } = {}) {
   const where = {};
   if (status !== undefined && status !== '' && status !== null) where.STATUS = Number(status);
   if (tanggal_awal && tanggal_akhir) where.TANGGAL = { [Op.between]: [tanggal_awal, tanggal_akhir] };
   if (search) where.NO_NOTA = { [Op.like]: `%${search}%` };
-  return Retur.findAll({ where, include: includeHeader, order: [['ID', 'DESC']] });
+
+  const pagination = parsePagination({ page, limit });
+  const query = { where, attributes: LIST_ATTRIBUTES, include: includeHeader, order: [['ID', 'DESC']] };
+  if (!pagination) return Retur.findAll(query);
+  const result = await Retur.findAndCountAll({
+    ...query,
+    distinct: true,
+    limit: pagination.limit,
+    offset: pagination.offset,
+  });
+  return paginated(result.rows, result.count, pagination);
 }
 
 async function getById(id) {

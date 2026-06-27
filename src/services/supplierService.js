@@ -1,10 +1,11 @@
 const { Op } = require('sequelize');
 const { Supplier } = require('../models');
 const ApiError = require('../utils/ApiError');
+const { parsePagination, paginated } = require('../utils/pagination');
 
 // Semua query ter-scope merchant otomatis (hook tenant) — admin merchant hanya
 // melihat/mengelola supplier miliknya sendiri.
-async function list({ search, status } = {}) {
+async function list({ search, status, page, limit } = {}) {
   const where = {};
   if (status !== undefined && status !== '' && status !== null) where.STATUS = Number(status);
   if (search) {
@@ -14,7 +15,15 @@ async function list({ search, status } = {}) {
       { EMAIL: { [Op.like]: `%${search}%` } },
     ];
   }
-  return Supplier.findAll({ where, order: [['NAMA', 'ASC']] });
+  const pagination = parsePagination({ page, limit });
+  const query = { where, order: [['NAMA', 'ASC']] };
+  if (!pagination) return Supplier.findAll(query);
+  const result = await Supplier.findAndCountAll({
+    ...query,
+    limit: pagination.limit,
+    offset: pagination.offset,
+  });
+  return paginated(result.rows, result.count, pagination);
 }
 
 async function getById(id) {

@@ -7,6 +7,7 @@ const { activeMerchantId } = require('../utils/tenancy');
 const { currentPlan, hasProFeatures } = require('../utils/plan');
 const penjualanService = require('./penjualanService');
 const modifierService = require('./modifierService');
+const { parsePagination, paginated } = require('../utils/pagination');
 
 // Open Bill hanya untuk plan PRO/BUSINESS. Divalidasi di backend (bukan sekadar UI).
 async function assertPro() {
@@ -37,6 +38,7 @@ const includeFull = [
   { model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] },
   { model: OpenBillDetail, as: 'detail', include: [{ model: Produk, as: 'produk', attributes: ['ID', 'NAMA', 'STOK'] }] },
 ];
+const LIST_ATTRIBUTES = ['ID', 'NO_BILL', 'CUSTOMER_NAME', 'TABLE_NO', 'NOTE', 'STATUS', 'TOTAL', 'ID_USER', 'ID_PENJUALAN', 'CREATED_AT'];
 
 // Nomor bill unik per merchant: BILL-{PREFIX}-{YYYYMMDD}-{RUNNING}
 async function buildNoBill(id) {
@@ -75,7 +77,7 @@ async function getById(id) {
   return bill;
 }
 
-async function list({ status, search } = {}) {
+async function list({ status, search, page, limit } = {}) {
   const where = {};
   if (status) where.STATUS = status;
   if (search) {
@@ -85,11 +87,21 @@ async function list({ status, search } = {}) {
       { NO_BILL: { [Op.like]: `%${search}%` } },
     ];
   }
-  return OpenBill.findAll({
+  const pagination = parsePagination({ page, limit });
+  const query = {
     where,
+    attributes: LIST_ATTRIBUTES,
     include: [{ model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] }],
     order: [['ID', 'DESC']],
+  };
+  if (!pagination) return OpenBill.findAll(query);
+  const result = await OpenBill.findAndCountAll({
+    ...query,
+    distinct: true,
+    limit: pagination.limit,
+    offset: pagination.offset,
   });
+  return paginated(result.rows, result.count, pagination);
 }
 
 /**

@@ -3,8 +3,11 @@ const catchAsync = require('../utils/catchAsync');
 const { success, created } = require('../utils/response');
 
 module.exports = {
-  list: catchAsync(async (req, res) =>
-    success(res, { data: await svc.list(req.query) })),
+  list: catchAsync(async (req, res) => {
+    const result = await svc.list(req.query);
+    if (result && result.rows) return success(res, { data: result.rows, meta: result.meta });
+    return success(res, { data: result });
+  }),
 
   getById: catchAsync(async (req, res) =>
     success(res, { data: await svc.getById(req.params.id) })),

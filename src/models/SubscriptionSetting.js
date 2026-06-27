@@ -12,6 +12,8 @@ const SubscriptionSetting = sequelize.define('m_subscription_setting', {
   PRICE_BUSINESS_MONTHLY: { type: DataTypes.INTEGER, defaultValue: 0 },
   PRICE_BUSINESS_YEARLY: { type: DataTypes.INTEGER, defaultValue: 0 },
   PAYMENT_TTL_HOURS: { type: DataTypes.INTEGER, defaultValue: 24 }, // masa berlaku pembayaran
+  MAINTENANCE_MODE: { type: DataTypes.INTEGER, defaultValue: 0 },   // 0=normal, 1=maintenance
+  MAINTENANCE_MESSAGE: { type: DataTypes.TEXT },                    // pesan maintenance (opsional)
 }, {
   tableName: 'm_subscription_setting',
   timestamps: true,

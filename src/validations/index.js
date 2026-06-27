@@ -1,6 +1,10 @@
 const Joi = require('joi');
 
 const idParam = { params: Joi.object({ id: Joi.number().integer().required() }) };
+const paginationQuery = {
+  page: Joi.number().integer().min(1),
+  limit: Joi.number().integer().min(1).max(100),
+};
 
 module.exports = {
   idParam,
@@ -14,17 +18,19 @@ module.exports = {
     },
     register: {
       body: Joi.object({
+        // Form ringkas: Nama, Email, Telepon, Username, Password.
         owner_name: Joi.string().max(150).required(),
-        store_name: Joi.string().max(150).required(),
         email: Joi.string().email().max(150).required(),
         phone: Joi.string().max(30).required(),
-        address: Joi.string().max(500).required(),
-        city: Joi.string().max(100).required(),
-        province: Joi.string().max(100).required(),
-        business_category: Joi.string().max(100).required(),
         username: Joi.string().min(3).max(100).required(),
         password: Joi.string().min(6).max(100).required(),
-        password_confirmation: Joi.string().required(),
+        // Field lain opsional (dilengkapi nanti di halaman admin via onboarding).
+        store_name: Joi.string().max(150).allow('', null),
+        address: Joi.string().max(500).allow('', null),
+        city: Joi.string().max(100).allow('', null),
+        province: Joi.string().max(100).allow('', null),
+        business_category: Joi.string().max(100).allow('', null),
+        password_confirmation: Joi.string().allow('', null),
       }),
     },
     verifyOtp: {
@@ -189,7 +195,9 @@ module.exports = {
         tanggal_awal: Joi.date().iso(),
         tanggal_akhir: Joi.date().iso(),
         id_user: Joi.number().integer(),
+        id_jenis_bayar: Joi.number().integer(),
         status: Joi.number().valid(0, 1),
+        ...paginationQuery,
       }),
     },
     checkout: {
@@ -282,6 +290,8 @@ module.exports = {
         price_business_monthly: Joi.number().integer().min(0),
         price_business_yearly: Joi.number().integer().min(0),
         payment_ttl_hours: Joi.number().integer().min(1).max(168),
+        maintenance_mode: Joi.boolean(),
+        maintenance_message: Joi.string().allow('', null),
       }).min(1),
     },
     create: {
@@ -300,6 +310,7 @@ module.exports = {
       query: Joi.object({
         status: Joi.string().valid('OPEN', 'PAID', 'CANCELLED'),
         search: Joi.string().allow('', null),
+        ...paginationQuery,
       }),
     },
     create: {
@@ -527,7 +538,9 @@ module.exports = {
         tanggal_awal: Joi.date().iso().required(),
         tanggal_akhir: Joi.date().iso().required(),
         id_user: Joi.alternatives(Joi.number().integer(), Joi.string().valid('all')).default('all'),
+        id_jenis_bayar: Joi.number().integer(),
         status: Joi.number().valid(0, 1).default(1),
+        ...paginationQuery,
       }),
     },
     pendapatan: {

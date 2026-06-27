@@ -4,15 +4,36 @@ const ApiError = require('../utils/ApiError');
 const { deleteProductImage } = require('../utils/fileUrl');
 const { activeMerchantId, getTenant } = require('../utils/tenancy');
 const { currentPlan, FREE_MAX_PRODUK } = require('../utils/plan');
+const { parsePagination, paginated } = require('../utils/pagination');
 
-async function list({ search } = {}) {
+const LIST_ATTRIBUTES = ['ID', 'NAMA', 'ID_KATEGORI', 'STOK', 'HARGA_BELI', 'HARGA_JUAL', 'BARCODE', 'FOTO'];
+
+async function list({ search, category_id, page, limit } = {}) {
   const where = {};
-  if (search) where.NAMA = { [Op.like]: `%${search}%` };
-  return Produk.findAll({
+  if (category_id && category_id !== 'all') where.ID_KATEGORI = Number(category_id);
+  if (search) {
+    where[Op.or] = [
+      { NAMA: { [Op.like]: `%${search}%` } },
+      { BARCODE: { [Op.like]: `%${search}%` } },
+    ];
+  }
+
+  const pagination = parsePagination({ page, limit });
+  const query = {
     where,
+    attributes: LIST_ATTRIBUTES,
     include: [{ model: Kategori, as: 'kategori', attributes: ['ID', 'DESKRIPSI'] }],
     order: [['NAMA', 'ASC']],
+  };
+
+  if (!pagination) return Produk.findAll(query);
+  const result = await Produk.findAndCountAll({
+    ...query,
+    distinct: true,
+    limit: pagination.limit,
+    offset: pagination.offset,
   });
+  return paginated(result.rows, result.count, pagination);
 }
 
 async function getById(id) {
@@ -131,8 +152,16 @@ async function adjustStock(id, { jenis, qty, keterangan }) {
   return produk;
 }
 
-async function stockHistory(id) {
-  return RekamStok.findAll({ where: { ID_PRODUK: id }, order: [['ID', 'DESC']] });
+async function stockHistory(id, { page, limit } = {}) {
+  const pagination = parsePagination({ page, limit }, { defaultLimit: 50 });
+  const query = { where: { ID_PRODUK: id }, order: [['ID', 'DESC']] };
+  if (!pagination) return RekamStok.findAll({ ...query, limit: 100 });
+  const result = await RekamStok.findAndCountAll({
+    ...query,
+    limit: pagination.limit,
+    offset: pagination.offset,
+  });
+  return paginated(result.rows, result.count, pagination);
 }
 
 module.exports = { list, getById, getByBarcode, create, update, remove, adjustStock, stockHistory };

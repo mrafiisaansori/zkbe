@@ -26,6 +26,8 @@ async function updateSetting(data) {
     PRICE_BUSINESS_MONTHLY: data.price_business_monthly,
     PRICE_BUSINESS_YEARLY: data.price_business_yearly,
     PAYMENT_TTL_HOURS: data.payment_ttl_hours,
+    MAINTENANCE_MODE: data.maintenance_mode === undefined ? undefined : (data.maintenance_mode ? 1 : 0),
+    MAINTENANCE_MESSAGE: data.maintenance_message,
   };
   Object.keys(map).forEach((key) => { if (map[key] === undefined) delete map[key]; });
   await row.update(map);

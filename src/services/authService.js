@@ -67,6 +67,12 @@ async function login({ username, password }) {
       merchant: merchant ? {
         id: merchant.ID, nama: merchant.NAMA, status: merchant.STATUS,
         plan: merchant.PLAN, pro_expires_at: merchant.PRO_EXPIRES_AT,
+        onboarding_done: Number(merchant.ONBOARDING_DONE) === 1,
+        profile_complete: Boolean(
+          String(merchant.NAMA || '').trim()
+          && String(merchant.ADDRESS || '').trim()
+          && String(merchant.PHONE || '').trim(),
+        ),
       } : null,
     },
   };
@@ -79,9 +85,17 @@ async function me(reqUser) {
     const m = await Merchant.findByPk(reqUser.merchant_id);
     if (m) {
       await normalizePlan(m);
+      // Kelengkapan data wajib merchant: nama toko, alamat, dan no. telepon.
+      const profileComplete = Boolean(
+        String(m.NAMA || '').trim()
+        && String(m.ADDRESS || '').trim()
+        && String(m.PHONE || '').trim(),
+      );
       out.merchant = {
         id: m.ID, nama: m.NAMA, status: m.STATUS, invoice_prefix: m.INVOICE_PREFIX,
         plan: m.PLAN, pro_expires_at: m.PRO_EXPIRES_AT,
+        onboarding_done: Number(m.ONBOARDING_DONE) === 1,
+        profile_complete: profileComplete,
       };
     }
   }

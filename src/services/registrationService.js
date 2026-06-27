@@ -38,7 +38,8 @@ async function register(data) {
   const phone = normPhone(data.phone);
   const username = norm(data.username);
 
-  if (data.password !== data.password_confirmation) {
+  // Konfirmasi password hanya dicek bila dikirim (form ringkas tidak mengirimnya).
+  if (data.password_confirmation && data.password !== data.password_confirmation) {
     throw new ApiError(422, 'Konfirmasi password tidak cocok.');
   }
   await assertUnique({ email, phone, username });
@@ -49,7 +50,7 @@ async function register(data) {
   const passwordHash = await hashPassword(data.password);
   const payload = {
     owner_name: norm(data.owner_name),
-    store_name: norm(data.store_name),
+    store_name: norm(data.store_name) || norm(data.owner_name), // default: pakai nama bila toko belum diisi
     email,
     phone,
     address: norm(data.address),

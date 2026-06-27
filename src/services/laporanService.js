@@ -5,33 +5,67 @@ const {
 const ApiError = require('../utils/ApiError');
 const { currentPlan, hasProFeatures } = require('../utils/plan');
 const { LOW_STOCK_THRESHOLD, LOW_STOCK_LIMIT, LOW_STOCK_ORDER } = require('../utils/inventory');
+const { parsePagination, paginated } = require('../utils/pagination');
+
+const PENJUALAN_LIST_ATTRIBUTES = [
+  'ID', 'TANGGAL', 'JAM', 'ID_JENIS_BAYAR', 'TOTAL', 'ID_USER',
+  'KETERANGAN', 'DISKON', 'PPN', 'SERVICE_CHARGE', 'STATUS', 'STATUS_BAYAR',
+];
 
 /**
  * Laporan penjualan - meniru getPenjualanByKasirAndTanggal() / filterLaporanPenjualan().
  * Filter: rentang tanggal, kasir (id_user / 'all'), status.
  */
-async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', status = 1 }) {
+async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', id_jenis_bayar, status = 1, page, limit }) {
   const where = { TANGGAL: { [Op.between]: [tanggal_awal, tanggal_akhir] }, STATUS: status };
   if (id_user && id_user !== 'all') where.ID_USER = id_user;
+  if (id_jenis_bayar) where.ID_JENIS_BAYAR = id_jenis_bayar;
 
-  const rows = await Penjualan.findAll({
+  const [agg = {}] = await Penjualan.findAll({
     where,
+    attributes: [
+      [literal('COUNT(`t_penjualan`.`ID`)'), 'jumlah_transaksi'],
+      [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`TOTAL`, 0)), 0)'), 'total_dibayar'],
+      [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`PPN`, 0)), 0)'), 'total_ppn'],
+      [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`SERVICE_CHARGE`, 0)), 0)'), 'total_service'],
+    ],
+    raw: true,
+  });
+
+  const pagination = parsePagination({ page, limit });
+  const query = {
+    where,
+    attributes: PENJUALAN_LIST_ATTRIBUTES,
     include: [
       { model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] },
       { model: JenisBayar, as: 'jenisBayar', attributes: ['ID', 'NAMA'] },
     ],
     order: [['TANGGAL', 'ASC'], ['ID', 'ASC']],
-  });
+  };
+  let rows;
+  let meta;
+  if (pagination) {
+    const result = await Penjualan.findAndCountAll({
+      ...query,
+      distinct: true,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+    rows = result.rows;
+    meta = paginated([], result.count, pagination).meta;
+  } else {
+    rows = await Penjualan.findAll(query);
+  }
 
   // total_dibayar = bruto yang dibayar pelanggan (termasuk PPN & service).
   // omzet = penjualan bersih (tanpa PPN & service) — standar akuntansi/POS.
-  const total_dibayar = rows.reduce((s, r) => s + (Number(r.TOTAL) || 0), 0);
-  const total_ppn = rows.reduce((s, r) => s + (Number(r.PPN) || 0), 0);
-  const total_service = rows.reduce((s, r) => s + (Number(r.SERVICE_CHARGE) || 0), 0);
+  const total_dibayar = Number(agg.total_dibayar) || 0;
+  const total_ppn = Number(agg.total_ppn) || 0;
+  const total_service = Number(agg.total_service) || 0;
   const omzet = total_dibayar - total_ppn - total_service;
-  return {
-    filter: { tanggal_awal, tanggal_akhir, id_user, status },
-    jumlah_transaksi: rows.length,
+  const payload = {
+    filter: { tanggal_awal, tanggal_akhir, id_user, id_jenis_bayar, status },
+    jumlah_transaksi: Number(agg.jumlah_transaksi) || 0,
     omzet,                 // penjualan bersih (tanpa pajak & service)
     total_ppn,            // PPN terkumpul (titipan pajak)
     total_service,        // service charge terkumpul
@@ -39,6 +73,7 @@ async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', status 
     total_penjualan: omzet, // kompatibilitas: total_penjualan = omzet bersih
     data: rows,
   };
+  return meta ? { payload, meta } : payload;
 }
 
 /**
@@ -50,21 +85,30 @@ async function pendapatan({ tanggal_awal, tanggal_akhir, status = 1 }) {
   const range = { TANGGAL: { [Op.between]: [tanggal_awal, tanggal_akhir] }, STATUS: status };
 
   // Header: hitung PPN, service, dan omzet bersih (DPP = TOTAL - PPN - service).
-  const headers = await Penjualan.findAll({ where: range, attributes: ['TOTAL', 'PPN', 'SERVICE_CHARGE'] });
-  let bruto = 0; let ppn = 0; let service = 0;
-  headers.forEach((h) => {
-    bruto += Number(h.TOTAL) || 0;
-    ppn += Number(h.PPN) || 0;
-    service += Number(h.SERVICE_CHARGE) || 0;
+  const [headerAgg = {}] = await Penjualan.findAll({
+    where: range,
+    attributes: [
+      [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`TOTAL`, 0)), 0)'), 'bruto'],
+      [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`PPN`, 0)), 0)'), 'ppn'],
+      [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`SERVICE_CHARGE`, 0)), 0)'), 'service'],
+    ],
+    raw: true,
   });
+  const bruto = Number(headerAgg.bruto) || 0;
+  const ppn = Number(headerAgg.ppn) || 0;
+  const service = Number(headerAgg.service) || 0;
   const omzet = bruto - ppn - service; // penjualan bersih (tanpa pajak & service)
 
   // Detail: modal (HPP) dari harga beli.
-  const details = await DetailPenjualan.findAll({
+  const [detailAgg = {}] = await DetailPenjualan.findAll({
+    attributes: [
+      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_BELI`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'modal'],
+      [literal('COUNT(`t_detail_penjualan`.`ID`)'), 'jumlah_item'],
+    ],
     include: [{ model: Penjualan, as: 'penjualan', attributes: [], where: range, required: true }],
+    raw: true,
   });
-  let modal = 0;
-  for (const d of details) modal += d.HARGA_BELI * d.QTY;
+  const modal = Number(detailAgg.modal) || 0;
 
   return {
     filter: { tanggal_awal, tanggal_akhir, status },
@@ -74,20 +118,57 @@ async function pendapatan({ tanggal_awal, tanggal_akhir, status = 1 }) {
     ppn,                  // PPN terkumpul (dilaporkan terpisah)
     service,              // service charge terkumpul
     total_dibayar: bruto, // bruto yang diterima dari pelanggan
-    jumlah_item: details.length,
+    jumlah_item: Number(detailAgg.jumlah_item) || 0,
   };
 }
 
 /**
  * Laporan stok - daftar produk + stok saat ini.
  */
-async function stok() {
-  const rows = await Produk.findAll({
+async function stok({ search, page, limit } = {}) {
+  const where = {};
+  if (search) {
+    where[Op.or] = [
+      { NAMA: { [Op.like]: `%${search}%` } },
+      { BARCODE: { [Op.like]: `%${search}%` } },
+    ];
+  }
+
+  const [agg = {}] = await Produk.findAll({
+    where,
+    attributes: [
+      [literal('COUNT(`m_produk`.`ID`)'), 'jumlah_produk'],
+      [literal('COALESCE(SUM(COALESCE(`m_produk`.`STOK`, 0) * COALESCE(`m_produk`.`HARGA_BELI`, 0)), 0)'), 'nilai_stok'],
+    ],
+    raw: true,
+  });
+
+  const pagination = parsePagination({ page, limit });
+  const query = {
+    where,
     attributes: ['ID', 'NAMA', 'STOK', 'HARGA_BELI', 'HARGA_JUAL', 'BARCODE', 'ID_KATEGORI'],
     order: [['NAMA', 'ASC']],
-  });
-  const nilai_stok = rows.reduce((s, r) => s + (r.STOK * r.HARGA_BELI), 0);
-  return { jumlah_produk: rows.length, nilai_stok, data: rows };
+  };
+  let rows;
+  let meta;
+  if (pagination) {
+    const result = await Produk.findAndCountAll({
+      ...query,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    });
+    rows = result.rows;
+    meta = paginated([], result.count, pagination).meta;
+  } else {
+    rows = await Produk.findAll(query);
+  }
+
+  const payload = {
+    jumlah_produk: Number(agg.jumlah_produk) || 0,
+    nilai_stok: Number(agg.nilai_stok) || 0,
+    data: rows,
+  };
+  return meta ? { payload, meta } : payload;
 }
 
 /**
@@ -117,7 +198,7 @@ async function assertProReport() {
   }
 }
 
-async function rekap({
+async function rekapLegacy({
   tanggal_awal, tanggal_akhir, status = 1, top_limit = 10,
 }) {
   await assertProReport();
@@ -220,6 +301,165 @@ async function rekap({
     })),
     harian: [...harian.values()].sort((a, b) => a.tanggal.localeCompare(b.tanggal)),
     bulanan: [...bulanan.values()].sort((a, b) => a.bulan.localeCompare(b.bulan)),
+  };
+}
+
+async function rekap({
+  tanggal_awal, tanggal_akhir, status = 1, top_limit = 10,
+}) {
+  await assertProReport();
+  const range = { TANGGAL: { [Op.between]: [tanggal_awal, tanggal_akhir] }, STATUS: status };
+  const topLimit = Math.min(100, Math.max(1, Number(top_limit) || 10));
+
+  const [
+    headerRows,
+    perMetodeRows,
+    perKasirRows,
+    harianRows,
+    bulananRows,
+    detailAggRows,
+    produkRows,
+    stokMenipis,
+  ] = await Promise.all([
+    Penjualan.findAll({
+      where: range,
+      attributes: [
+        [literal('COUNT(`t_penjualan`.`ID`)'), 'total_transaksi'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`TOTAL`, 0)), 0)'), 'bruto'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`PPN`, 0)), 0)'), 'ppn'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`SERVICE_CHARGE`, 0)), 0)'), 'service'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`DISKON`, 0)), 0)'), 'diskon'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`DISKON_VOUCHER`, 0)), 0)'), 'voucher'],
+      ],
+      raw: true,
+    }),
+    Penjualan.findAll({
+      where: range,
+      attributes: [
+        [col('jenisBayar.NAMA'), 'metode'],
+        [literal('COUNT(`t_penjualan`.`ID`)'), 'jumlah_transaksi'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`TOTAL`, 0)), 0)'), 'total'],
+      ],
+      include: [{ model: JenisBayar, as: 'jenisBayar', attributes: [], required: false }],
+      group: ['jenisBayar.ID', 'jenisBayar.NAMA'],
+      raw: true,
+    }),
+    Penjualan.findAll({
+      where: range,
+      attributes: [
+        [col('kasir.ID'), 'id_user'],
+        [col('kasir.NAMA'), 'kasir'],
+        [literal('COUNT(`t_penjualan`.`ID`)'), 'jumlah_transaksi'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`TOTAL`, 0)), 0)'), 'total'],
+      ],
+      include: [{ model: Pengguna, as: 'kasir', attributes: [], required: false }],
+      group: ['kasir.ID', 'kasir.NAMA'],
+      raw: true,
+    }),
+    Penjualan.findAll({
+      where: range,
+      attributes: [
+        ['TANGGAL', 'tanggal'],
+        [literal('COUNT(`t_penjualan`.`ID`)'), 'jumlah_transaksi'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`TOTAL`, 0)), 0)'), 'total'],
+      ],
+      group: ['TANGGAL'],
+      order: [['TANGGAL', 'ASC']],
+      raw: true,
+    }),
+    Penjualan.findAll({
+      where: range,
+      attributes: [
+        [literal("DATE_FORMAT(`t_penjualan`.`TANGGAL`, '%Y-%m')"), 'bulan'],
+        [literal('COUNT(`t_penjualan`.`ID`)'), 'jumlah_transaksi'],
+        [literal('COALESCE(SUM(COALESCE(`t_penjualan`.`TOTAL`, 0)), 0)'), 'total'],
+      ],
+      group: [literal("DATE_FORMAT(`t_penjualan`.`TANGGAL`, '%Y-%m')")],
+      order: [[literal("DATE_FORMAT(`t_penjualan`.`TANGGAL`, '%Y-%m')"), 'ASC']],
+      raw: true,
+    }),
+    DetailPenjualan.findAll({
+      attributes: [[literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_BELI`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'modal']],
+      include: [{ model: Penjualan, as: 'penjualan', attributes: [], where: range, required: true }],
+      raw: true,
+    }),
+    DetailPenjualan.findAll({
+      attributes: [
+        'ID_PRODUK',
+        [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'qty'],
+        [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_JUAL`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'omzet'],
+      ],
+      include: [
+        { model: Penjualan, as: 'penjualan', attributes: [], where: range, required: true },
+        { model: Produk, as: 'produk', attributes: ['ID', 'NAMA'] },
+      ],
+      group: ['t_detail_penjualan.ID_PRODUK', 'produk.ID', 'produk.NAMA'],
+      order: [[literal('qty'), 'DESC']],
+      limit: topLimit,
+      raw: true,
+      nest: true,
+    }),
+    Produk.findAll({
+      where: { STOK: { [Op.lte]: LOW_STOCK_THRESHOLD } },
+      attributes: ['ID', 'NAMA', 'STOK', 'HARGA_JUAL'],
+      order: LOW_STOCK_ORDER,
+      limit: LOW_STOCK_LIMIT,
+    }),
+  ]);
+
+  const header = headerRows[0] || {};
+  const bruto = Number(header.bruto) || 0;
+  const ppn = Number(header.ppn) || 0;
+  const service = Number(header.service) || 0;
+  const diskon = Number(header.diskon) || 0;
+  const voucher = Number(header.voucher) || 0;
+  const modal = Number((detailAggRows[0] || {}).modal) || 0;
+  const omzet = bruto - ppn - service;
+
+  return {
+    filter: { tanggal_awal, tanggal_akhir, status, stok_threshold: LOW_STOCK_THRESHOLD },
+    ringkasan: {
+      omzet_bersih: omzet,
+      penerimaan_bruto: bruto,
+      total_transaksi: Number(header.total_transaksi) || 0,
+      total_modal: modal,
+      laba_kotor: omzet - modal,
+      ppn,
+      service_charge: service,
+      diskon,
+      voucher,
+      diskon_voucher_total: diskon + voucher,
+    },
+    per_metode_bayar: perMetodeRows.map((row) => ({
+      metode: row.metode || '(Tanpa metode)',
+      jumlah_transaksi: Number(row.jumlah_transaksi) || 0,
+      total: Number(row.total) || 0,
+    })).sort((a, b) => b.total - a.total),
+    per_kasir: perKasirRows.map((row) => ({
+      id_user: row.id_user == null ? null : Number(row.id_user),
+      kasir: row.kasir || '(Tanpa kasir)',
+      jumlah_transaksi: Number(row.jumlah_transaksi) || 0,
+      total: Number(row.total) || 0,
+    })).sort((a, b) => b.total - a.total),
+    produk_terlaris: produkRows.map((row) => ({
+      id_produk: row.ID_PRODUK,
+      nama: row.produk?.NAMA || `Produk #${row.ID_PRODUK}`,
+      qty: Number(row.qty) || 0,
+      omzet: Number(row.omzet) || 0,
+    })),
+    produk_stok_menipis: stokMenipis.map((p) => ({
+      id: p.ID, nama: p.NAMA, stok: p.STOK, harga_jual: p.HARGA_JUAL,
+    })),
+    harian: harianRows.map((row) => ({
+      tanggal: String(row.tanggal),
+      jumlah_transaksi: Number(row.jumlah_transaksi) || 0,
+      total: Number(row.total) || 0,
+    })),
+    bulanan: bulananRows.map((row) => ({
+      bulan: row.bulan,
+      jumlah_transaksi: Number(row.jumlah_transaksi) || 0,
+      total: Number(row.total) || 0,
+    })),
   };
 }
 

@@ -3,9 +3,17 @@ const catchAsync = require('../utils/catchAsync');
 const { success } = require('../utils/response');
 
 module.exports = {
-  penjualan: catchAsync(async (req, res) => success(res, { data: await svc.penjualan(req.query) })),
+  penjualan: catchAsync(async (req, res) => {
+    const result = await svc.penjualan(req.query);
+    if (result && result.payload) return success(res, { data: result.payload, meta: result.meta });
+    return success(res, { data: result });
+  }),
   pendapatan: catchAsync(async (req, res) => success(res, { data: await svc.pendapatan(req.query) })),
-  stok: catchAsync(async (req, res) => success(res, { data: await svc.stok() })),
+  stok: catchAsync(async (req, res) => {
+    const result = await svc.stok(req.query);
+    if (result && result.payload) return success(res, { data: result.payload, meta: result.meta });
+    return success(res, { data: result });
+  }),
   penyusutan: catchAsync(async (req, res) => success(res, { data: await svc.penyusutan() })),
 
   // Rekap lengkap (PRO/BUSINESS). Validasi plan ada di service.

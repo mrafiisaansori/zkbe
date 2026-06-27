@@ -14,8 +14,13 @@ function buildPayload(req) {
 }
 
 module.exports = {
-  list: catchAsync(async (req, res) =>
-    success(res, { data: withFotoUrlList(await svc.list({ search: req.query.search }), req) })),
+  list: catchAsync(async (req, res) => {
+    const result = await svc.list(req.query);
+    if (result && result.rows) {
+      return success(res, { data: withFotoUrlList(result.rows, req), meta: result.meta });
+    }
+    return success(res, { data: withFotoUrlList(result, req) });
+  }),
 
   getById: catchAsync(async (req, res) =>
     success(res, { data: withFotoUrl(await svc.getById(req.params.id), req) })),
@@ -34,8 +39,11 @@ module.exports = {
   adjustStock: catchAsync(async (req, res) =>
     success(res, { data: withFotoUrl(await svc.adjustStock(req.params.id, req.body), req), message: 'Stok disesuaikan' })),
 
-  stockHistory: catchAsync(async (req, res) =>
-    success(res, { data: await svc.stockHistory(req.params.id) })),
+  stockHistory: catchAsync(async (req, res) => {
+    const result = await svc.stockHistory(req.params.id, req.query);
+    if (result && result.rows) return success(res, { data: result.rows, meta: result.meta });
+    return success(res, { data: result });
+  }),
 
   // Unduh template Excel import produk.
   importTemplate: catchAsync(async (req, res) => {

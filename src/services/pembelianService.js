@@ -3,6 +3,7 @@ const {
   sequelize, Pembelian, DetailPembelian, Produk, Supplier, Pengguna, RekamStok,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
+const { parsePagination, paginated } = require('../utils/pagination');
 
 // STATUS: 0=DRAFT, 1=SELESAI, 2=CANCELLED
 const STATUS = { DRAFT: 0, SELESAI: 1, CANCELLED: 2 };
@@ -11,14 +12,25 @@ const includeHeader = [
   { model: Pengguna, as: 'user', attributes: ['ID', 'NAMA'] },
   { model: Supplier, as: 'supplier', attributes: ['ID', 'NAMA'] },
 ];
+const LIST_ATTRIBUTES = ['ID', 'NO_NOTA', 'TANGGAL', 'ID_USER', 'ID_SUPPLIER', 'STATUS', 'CATATAN'];
 
 // Daftar pembelian + filter status/tanggal/cari nomor nota. Scoped merchant via hook.
-async function list({ status, tanggal_awal, tanggal_akhir, search } = {}) {
+async function list({ status, tanggal_awal, tanggal_akhir, search, page, limit } = {}) {
   const where = {};
   if (status !== undefined && status !== '' && status !== null) where.STATUS = Number(status);
   if (tanggal_awal && tanggal_akhir) where.TANGGAL = { [Op.between]: [tanggal_awal, tanggal_akhir] };
   if (search) where.NO_NOTA = { [Op.like]: `%${search}%` };
-  return Pembelian.findAll({ where, include: includeHeader, order: [['ID', 'DESC']] });
+
+  const pagination = parsePagination({ page, limit });
+  const query = { where, attributes: LIST_ATTRIBUTES, include: includeHeader, order: [['ID', 'DESC']] };
+  if (!pagination) return Pembelian.findAll(query);
+  const result = await Pembelian.findAndCountAll({
+    ...query,
+    distinct: true,
+    limit: pagination.limit,
+    offset: pagination.offset,
+  });
+  return paginated(result.rows, result.count, pagination);
 }
 
 async function getById(id) {

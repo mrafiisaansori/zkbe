@@ -12,6 +12,9 @@ const v = require('../validations');
 router.get('/menu/:token', ctrl.getMenu);
 router.post('/menu/:token/order', validate(v.public.order), ctrl.createOrder);
 
+// Status maintenance (publik, tanpa login)
+router.get('/maintenance', ctrl.maintenance);
+
 // Katalog publik
 router.get('/store/:slug', ctrl.getCatalog);
 

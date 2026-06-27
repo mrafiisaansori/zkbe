@@ -9,6 +9,7 @@ const taxService = require('./taxService');
 const voucherService = require('./voucherService');
 const modifierService = require('./modifierService');
 const { currentPlan, hasProFeatures, PRO_UPGRADE_MESSAGE } = require('../utils/plan');
+const { parsePagination, paginated } = require('../utils/pagination');
 
 // Nomor nota dengan prefix merchant (mis. "TZK-000025"). Unik antar merchant.
 async function buildNoNota(id) {
@@ -24,12 +25,28 @@ const includeHeader = [
   { model: JenisBayar, as: 'jenisBayar', attributes: ['ID', 'NAMA'] },
 ];
 
-async function list({ tanggal_awal, tanggal_akhir, id_user, status } = {}) {
+const LIST_ATTRIBUTES = [
+  'ID', 'TANGGAL', 'JAM', 'ID_JENIS_BAYAR', 'TOTAL', 'ID_USER', 'KETERANGAN',
+  'DISKON', 'PPN', 'SERVICE_CHARGE', 'STATUS', 'STATUS_BAYAR', 'PAYMENT_STATUS',
+];
+
+async function list({ tanggal_awal, tanggal_akhir, id_user, id_jenis_bayar, status, page, limit } = {}) {
   const where = {};
   if (tanggal_awal && tanggal_akhir) where.TANGGAL = { [Op.between]: [tanggal_awal, tanggal_akhir] };
   if (id_user) where.ID_USER = id_user;
+  if (id_jenis_bayar) where.ID_JENIS_BAYAR = id_jenis_bayar;
   if (status !== undefined) where.STATUS = status;
-  return Penjualan.findAll({ where, include: includeHeader, order: [['ID', 'DESC']] });
+
+  const pagination = parsePagination({ page, limit });
+  const query = { where, attributes: LIST_ATTRIBUTES, include: includeHeader, order: [['ID', 'DESC']] };
+  if (!pagination) return Penjualan.findAll(query);
+  const result = await Penjualan.findAndCountAll({
+    ...query,
+    distinct: true,
+    limit: pagination.limit,
+    offset: pagination.offset,
+  });
+  return paginated(result.rows, result.count, pagination);
 }
 
 async function getById(id) {

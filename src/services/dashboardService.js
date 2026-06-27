@@ -5,6 +5,7 @@ const {
 const { todayDate } = require('../utils/helpers');
 const { activeMerchantId } = require('../utils/tenancy');
 const { LOW_STOCK_THRESHOLD, LOW_STOCK_LIMIT, LOW_STOCK_ORDER } = require('../utils/inventory');
+const { remember } = require('../utils/cache');
 
 // PENTING: Sequelize sum()/aggregate TIDAK memicu hook scoping tenant
 // (beda dengan find & count). Jadi merchant_id WAJIB disisipkan manual ke
@@ -15,11 +16,16 @@ function withMerchant(where = {}) {
   return mid === undefined ? where : { ...where, MERCHANT_ID: mid };
 }
 
+function cacheKey(extra = '') {
+  const mid = activeMerchantId();
+  return `${mid === undefined ? 'all' : mid}:${extra}`;
+}
+
 /**
  * Ringkasan dashboard: penjualan hari ini, jumlah transaksi, produk, user,
  * dan produk stok menipis.
  */
-async function summary() {
+async function summaryFresh() {
   const today = todayDate();
   const todayWhere = { TANGGAL: today, STATUS: 1 };
 
@@ -53,31 +59,42 @@ async function summary() {
   const omzet = bruto - ppn - service; // omzet bersih (tanpa PPN & service)
 
   // Modal & qty terjual hari ini (untuk laba kotor) — DetailPenjualan ter-scope (find).
-  const detailsToday = await DetailPenjualan.findAll({
-    attributes: ['HARGA_BELI', 'HARGA_JUAL', 'QTY'],
+  const [todayAgg = {}] = await DetailPenjualan.findAll({
+    attributes: [
+      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_BELI`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'modal'],
+      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'qty'],
+    ],
     include: [{ model: Penjualan, as: 'penjualan', attributes: [], required: true, where: { TANGGAL: today, STATUS: 1 } }],
+    raw: true,
   });
-  let modalToday = 0; let qtyToday = 0;
-  detailsToday.forEach((d) => { modalToday += (Number(d.HARGA_BELI) || 0) * d.QTY; qtyToday += Number(d.QTY) || 0; });
+  const modalToday = Number(todayAgg.modal) || 0;
+  const qtyToday = Number(todayAgg.qty) || 0;
 
   // Produk terlaris bulan ini (top 5 by qty) — agregasi di JS agar robust.
   const d = new Date(today);
   const firstOfMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-  const detailsMonth = await DetailPenjualan.findAll({
-    attributes: ['ID_PRODUK', 'HARGA_JUAL', 'QTY'],
+  const produkTerlarisRows = await DetailPenjualan.findAll({
+    attributes: [
+      'ID_PRODUK',
+      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'qty'],
+      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_JUAL`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'omzet'],
+    ],
     include: [
       { model: Penjualan, as: 'penjualan', attributes: [], required: true, where: { TANGGAL: { [Op.between]: [firstOfMonth, today] }, STATUS: 1 } },
       { model: Produk, as: 'produk', attributes: ['NAMA'] },
     ],
+    group: ['t_detail_penjualan.ID_PRODUK', 'produk.ID', 'produk.NAMA'],
+    order: [[literal('qty'), 'DESC']],
+    limit: 5,
+    raw: true,
+    nest: true,
   });
-  const terlarisMap = {};
-  detailsMonth.forEach((row) => {
-    const id = row.ID_PRODUK;
-    if (!terlarisMap[id]) terlarisMap[id] = { id_produk: id, nama: row.produk ? row.produk.NAMA : `#${id}`, qty: 0, omzet: 0 };
-    terlarisMap[id].qty += Number(row.QTY) || 0;
-    terlarisMap[id].omzet += (Number(row.HARGA_JUAL) || 0) * (Number(row.QTY) || 0);
-  });
-  const produkTerlaris = Object.values(terlarisMap).sort((a, b) => b.qty - a.qty).slice(0, 5);
+  const produkTerlaris = produkTerlarisRows.map((row) => ({
+    id_produk: row.ID_PRODUK,
+    nama: row.produk?.NAMA || `#${row.ID_PRODUK}`,
+    qty: Number(row.qty) || 0,
+    omzet: Number(row.omzet) || 0,
+  }));
 
   // Transaksi terbaru (5) — Penjualan ter-scope (find).
   const transaksiTerbaru = await Penjualan.findAll({
@@ -107,6 +124,10 @@ async function summary() {
   };
 }
 
+async function summary() {
+  return remember('dashboard-summary', cacheKey(todayDate()), 10 * 1000, summaryFresh);
+}
+
 function emptyMonthlyChart(tahun) {
   return Array.from({ length: 12 }, (_, index) => ({
     bulan: index + 1,
@@ -118,7 +139,7 @@ function emptyMonthlyChart(tahun) {
 /**
  * Grafik laba & omzet bulanan per tahun - meniru showChart() di CI.
  */
-async function chartTahunan(tahun) {
+async function chartTahunanFresh(tahun) {
   const selectedYear = Number(tahun);
   const data = emptyMonthlyChart(selectedYear);
   const startDate = `${selectedYear}-01-01`;
@@ -161,6 +182,10 @@ async function chartTahunan(tahun) {
   });
 
   return { tahun: selectedYear, data };
+}
+
+async function chartTahunan(tahun) {
+  return remember('dashboard-chart', cacheKey(String(tahun)), 60 * 1000, () => chartTahunanFresh(tahun));
 }
 
 /**
