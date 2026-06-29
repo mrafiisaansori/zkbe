@@ -349,6 +349,34 @@ module.exports = {
         keterangan: Joi.string().allow('', null),
       }),
     },
+    payPartial: {
+      params: idParam.params,
+      body: Joi.object({
+        payer_name: Joi.string().max(150).allow('', null),
+        items: Joi.array().items(Joi.object({
+          id_open_bill_detail: Joi.number().integer().required(),
+          qty: Joi.number().positive().required(),
+        })).min(1).required(),
+        id_jenis_bayar: Joi.number().integer().required(),
+        bayar: Joi.number().min(0),
+        diskon: Joi.number().min(0).default(0),
+        keterangan: Joi.string().allow('', null),
+      }),
+    },
+    payPartialQris: {
+      params: idParam.params,
+      body: Joi.object({
+        payer_name: Joi.string().max(150).allow('', null),
+        items: Joi.array().items(Joi.object({
+          id_open_bill_detail: Joi.number().integer().required(),
+          qty: Joi.number().positive().required(),
+        })).min(1).required(),
+        id_jenis_bayar: Joi.number().integer().required(),
+        diskon: Joi.number().min(0).default(0),
+        keterangan: Joi.string().allow('', null),
+        customer_name: Joi.string().max(80).allow('', null),
+      }),
+    },
   },
 
   kasShift: {

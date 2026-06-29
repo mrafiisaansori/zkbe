@@ -18,6 +18,7 @@ const Penyusutan = require('./Penyusutan');
 const Transaksi = require('./Transaksi');
 const OpenBill = require('./OpenBill');
 const OpenBillDetail = require('./OpenBillDetail');
+const OpenBillPayment = require('./OpenBillPayment');
 const TaxSetting = require('./TaxSetting');
 const Voucher = require('./Voucher');
 const Meja = require('./Meja');
@@ -80,6 +81,10 @@ OpenBillDetail.belongsTo(OpenBill, { foreignKey: 'ID_OPEN_BILL', targetKey: 'ID'
 OpenBillDetail.belongsTo(Produk, { foreignKey: 'ID_PRODUK', targetKey: 'ID', as: 'produk' });
 OpenBill.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'kasir' });
 OpenBill.belongsTo(Penjualan, { foreignKey: 'ID_PENJUALAN', targetKey: 'ID', as: 'penjualan' });
+OpenBill.hasMany(OpenBillPayment, { foreignKey: 'ID_OPEN_BILL', sourceKey: 'ID', as: 'payments' });
+OpenBillPayment.belongsTo(OpenBill, { foreignKey: 'ID_OPEN_BILL', targetKey: 'ID', as: 'bill' });
+OpenBillPayment.belongsTo(Penjualan, { foreignKey: 'ID_PENJUALAN', targetKey: 'ID', as: 'penjualan' });
+OpenBillPayment.belongsTo(JenisBayar, { foreignKey: 'ID_JENIS_BAYAR', targetKey: 'ID', as: 'jenisBayar' });
 
 // ===== Modifier / Varian =====
 ModifierGroup.hasMany(ModifierOption, { foreignKey: 'ID_GROUP', sourceKey: 'ID', as: 'options' });
@@ -116,7 +121,7 @@ KasShift.hasMany(Penjualan, { foreignKey: 'ID_SHIFT', sourceKey: 'ID', as: 'penj
   Pengguna, Kategori, Produk, Supplier, JenisBayar, Identitas, Qris,
   Penjualan, DetailPenjualan, Pembelian, DetailPembelian,
   Retur, DetailRetur, RekamStok, Penyusutan, Transaksi,
-  OpenBill, OpenBillDetail,
+  OpenBill, OpenBillDetail, OpenBillPayment,
   TaxSetting, Voucher, SubscriptionPayment, Meja,
   ModifierGroup, ModifierOption, ProdukModifier,
   PaymentGatewaySetting, PaymentLog,
@@ -132,7 +137,7 @@ module.exports = {
   Pengguna, Kategori, Produk, Supplier, JenisBayar, Identitas, Qris,
   Penjualan, DetailPenjualan, Pembelian, DetailPembelian,
   Retur, DetailRetur, RekamStok, Penyusutan, Transaksi,
-  OpenBill, OpenBillDetail,
+  OpenBill, OpenBillDetail, OpenBillPayment,
   TaxSetting, Voucher, SubscriptionSetting, SubscriptionPayment, Meja,
   ModifierGroup, ModifierOption, ProdukModifier,
   PaymentGatewaySetting, PaymentLog, PaymentWebhookLog,

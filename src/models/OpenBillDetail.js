@@ -10,6 +10,7 @@ const OpenBillDetail = sequelize.define('t_open_bill_detail', {
   HARGA_BELI: { type: DataTypes.INTEGER },
   HARGA_JUAL: { type: DataTypes.INTEGER },
   QTY: { type: DataTypes.DOUBLE },
+  PAID_QTY: { type: DataTypes.DOUBLE, defaultValue: 0 },
   MODIFIER: { type: DataTypes.TEXT }, // deskripsi varian terpilih
   MODIFIER_OPTIONS: { type: DataTypes.STRING(255) }, // csv id opsi (untuk edit bill)
   NOTE: { type: DataTypes.STRING(255) },

@@ -40,7 +40,7 @@ async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', id_jeni
       { model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] },
       { model: JenisBayar, as: 'jenisBayar', attributes: ['ID', 'NAMA'] },
     ],
-    order: [['TANGGAL', 'ASC'], ['ID', 'ASC']],
+    order: [['TANGGAL', 'DESC'], ['ID', 'DESC']],
   };
   let rows;
   let meta;

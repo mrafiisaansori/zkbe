@@ -137,6 +137,11 @@ async function applyStatus(penjualan, localStatus, midtransTrxId) {
     // PENDING / UNPAID: cukup perbarui status pembayaran.
     await penjualan.update(updates);
   }
+
+  try {
+    const openBillService = require('./openBillService');
+    await openBillService.applyGatewayPaymentStatus(penjualan.ID, localStatus);
+  } catch (_) { /* bukan transaksi split open bill / abaikan */ }
 }
 
 /**

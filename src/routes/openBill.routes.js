@@ -79,6 +79,8 @@ router.post('/', validate(v.openBill.create), ctrl.create);
 router.get('/:id', ctrl.getById);
 router.put('/:id', validate(v.openBill.update), ctrl.update);
 router.post('/:id/pay', validate(v.openBill.pay), ctrl.pay);
+router.post('/:id/pay-partial', validate(v.openBill.payPartial), ctrl.payPartial);
+router.post('/:id/pay-partial/qris/create', validate(v.openBill.payPartialQris), ctrl.createPartialQris);
 router.post('/:id/cancel', ctrl.cancel);
 
 module.exports = router;

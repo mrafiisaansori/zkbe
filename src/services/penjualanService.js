@@ -77,7 +77,7 @@ async function getById(id) {
 //   Default (tanpa payment) = perilaku lama: STATUS_BAYAR='LUNAS'.
 async function checkout({
   items, id_jenis_bayar, id_user, bayar, keterangan, diskon = 0, kode_voucher,
-  _trusted = false, payment = null,
+  _trusted = false, payment = null, _transaction = null,
 }) {
   if (!items || items.length === 0) throw new ApiError(400, 'Keranjang kosong, tidak ada item untuk dibayar');
 
@@ -89,7 +89,7 @@ async function checkout({
     : { PPN_ENABLED: false, PPN_PERSEN: 0, SERVICE_ENABLED: false, SERVICE_PERSEN: 0 };
   if (kode_voucher && !proEnabled) throw new ApiError(403, PRO_UPGRADE_MESSAGE);
 
-  return sequelize.transaction(async (t) => {
+  const run = async (t) => {
     // Ambil & validasi semua produk + hitung diskon per item.
     let subtotal = 0;
     let diskonItemTotal = 0;
@@ -202,7 +202,10 @@ async function checkout({
       bayar: bayar !== undefined && bayar !== null ? Number(bayar) : null,
       kembalian,
     };
-  });
+  };
+
+  if (_transaction) return run(_transaction);
+  return sequelize.transaction(run);
 }
 
 /**

@@ -20,7 +20,13 @@ module.exports = {
     success(res, { data: await svc.update(req.params.id, req.body), message: 'Open bill diperbarui' })),
 
   pay: catchAsync(async (req, res) =>
-    success(res, { data: await svc.pay(req.params.id, req.body), message: 'Open bill dibayar' })),
+    success(res, { data: await svc.pay(req.params.id, { ...req.body, id_user: req.user.id }), message: 'Open bill dibayar' })),
+
+  payPartial: catchAsync(async (req, res) =>
+    success(res, { data: await svc.payPartial(req.params.id, { ...req.body, id_user: req.user.id }), message: 'Split bill dibayar' })),
+
+  createPartialQris: catchAsync(async (req, res) =>
+    success(res, { data: await svc.createPartialQris(req.params.id, { ...req.body, id_user: req.user.id }), message: 'QRIS split bill dibuat' })),
 
   cancel: catchAsync(async (req, res) =>
     success(res, { data: await svc.cancel(req.params.id), message: 'Open bill dibatalkan' })),
