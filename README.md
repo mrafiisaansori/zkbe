@@ -18,7 +18,7 @@ arsitektur yang bersih, modular, dan mudah dikembangkan.
 | Database          | MySQL (skema sama dengan POS existing) |
 | Validasi request  | Joi |
 | Dokumentasi API   | Swagger (swagger-jsdoc + swagger-ui-express) |
-| Proteksi API/Docs | Basic Authentication (`express-basic-auth`) |
+| Proteksi API/Docs | JWT Bearer untuk API, Basic Authentication untuk Swagger Docs |
 | Logging           | morgan |
 
 ## Struktur Folder
@@ -103,34 +103,40 @@ Cek kesehatan: `GET http://localhost:3000/health` (tanpa auth).
 
 - URL: **`http://localhost:3000/api-docs`**
 - Spec JSON: `http://localhost:3000/api-docs.json`
-- Swagger **dilindungi Basic Auth** — browser akan meminta kredensial saat dibuka.
+- Swagger **dilindungi Basic Auth** - browser akan meminta kredensial saat dibuka.
+- Endpoint protected di Swagger memakai **Bearer JWT**. Klik `Authorize`, pilih `bearerAuth`,
+  lalu paste token dari response `POST /api/auth/login` tanpa prefix `Bearer`.
 - Setiap endpoint terdokumentasi: method, path, request body, query/path params,
   contoh response, status code, dan kebutuhan auth.
 
-## Basic Auth
+## Authentication
 
-Seluruh `/api/*` **dan** halaman Swagger `/api-docs` dilindungi Basic Authentication.
+Halaman Swagger `/api-docs` dan spec `/api-docs.json` dilindungi Basic Authentication.
 
 ```
 username: admin
 password: rahasia
 ```
 
-Kredensial dibaca dari `.env` (`BASIC_AUTH_USERNAME` / `BASIC_AUTH_PASSWORD`) — tidak di-hardcode.
+Kredensial dibaca dari `.env` (`BASIC_AUTH_USERNAME` / `BASIC_AUTH_PASSWORD`) - tidak di-hardcode.
 
-Contoh request:
+Endpoint API protected memakai JWT Bearer dari login:
 
 ```bash
-curl -u admin:rahasia http://localhost:3000/api/produk
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"rahasia"}'
+
+curl http://localhost:3000/api/produk \
+  -H "Authorization: Bearer TOKEN_DARI_LOGIN"
 ```
 
 ## Role admin & kasir
 
 Tabel `m_pengguna` menyimpan kolom `LEVEL`: **1 = admin**, **2 = kasir**.
 Endpoint `POST /api/auth/login` memvalidasi username/password dan mengembalikan data user
-beserta `role` (`admin`/`kasir`). Sesuai keputusan proyek, proteksi utama memakai **Basic Auth**;
-guard per-role tersedia secara opsional di `src/middlewares/role.js` (membaca header `x-user-level`)
-bila nanti ingin diperketat.
+beserta `role` (`admin`/`kasir`). Proteksi endpoint utama memakai **JWT Bearer** lewat header
+`Authorization: Bearer <token>`. Guard per-role tersedia di `src/middlewares/role.js`.
 
 ## Daftar Endpoint Utama
 

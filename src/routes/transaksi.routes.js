@@ -13,7 +13,7 @@ const v = require('../validations');
  *   get:
  *     summary: Daftar transaksi keuangan
  *     tags: [Transaksi Keuangan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: query, name: tanggal, schema: { type: string, format: date } }
  *       - { in: query, name: tanggal_awal, schema: { type: string, format: date } }
@@ -22,7 +22,7 @@ const v = require('../validations');
  *   post:
  *     summary: Catat transaksi keuangan
  *     tags: [Transaksi Keuangan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
  *       content:
@@ -41,7 +41,7 @@ const v = require('../validations');
  *   delete:
  *     summary: Hapus transaksi keuangan
  *     tags: [Transaksi Keuangan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Dihapus } }
  */

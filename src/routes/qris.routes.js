@@ -19,7 +19,7 @@ router.use(forbidGudang);
  *   get:
  *     summary: Ambil pengaturan QRIS
  *     tags: [QRIS]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200:
  *         description: OK
@@ -32,7 +32,7 @@ router.use(forbidGudang);
  *     summary: Ubah pengaturan QRIS (upload gambar opsional)
  *     description: Kirim sebagai multipart/form-data bila menyertakan gambar (field `image`, jpg/jpeg/png/webp, maks 2MB).
  *     tags: [QRIS]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       content:
  *         multipart/form-data:

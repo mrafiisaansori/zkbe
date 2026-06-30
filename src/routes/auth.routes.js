@@ -15,6 +15,7 @@ const turnstile = require('../middlewares/turnstile');
  *     summary: Login user (super admin / admin merchant / kasir)
  *     description: Mengembalikan JWT (token) + data user. Token dikirim sebagai Bearer di request berikutnya.
  *     tags: [Auth]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -35,6 +36,7 @@ const turnstile = require('../middlewares/turnstile');
  *   post:
  *     summary: Registrasi merchant baru (kirim OTP ke email)
  *     tags: [Auth]
+ *     security: []
  *     responses:
  *       201: { description: OTP terkirim }
  *       409: { description: Email / nomor HP / username sudah dipakai }
@@ -44,6 +46,7 @@ const turnstile = require('../middlewares/turnstile');
  *   post:
  *     summary: Verifikasi OTP & aktifkan merchant
  *     tags: [Auth]
+ *     security: []
  *     responses:
  *       200: { description: Merchant aktif, Admin Merchant dibuat }
  *       400: { description: OTP salah / kedaluwarsa }
@@ -52,6 +55,7 @@ const turnstile = require('../middlewares/turnstile');
  *   post:
  *     summary: Kirim ulang OTP (dengan cooldown)
  *     tags: [Auth]
+ *     security: []
  *     responses:
  *       200: { description: OTP baru terkirim }
  *       429: { description: Masih dalam masa cooldown }

@@ -13,7 +13,7 @@ const v = require('../validations');
  *   get:
  *     summary: Daftar open bill (filter status & pencarian nama/meja/no bill)
  *     tags: [OpenBill]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: query, name: status, schema: { type: string, enum: [OPEN, PAID, CANCELLED] } }
  *       - { in: query, name: search, schema: { type: string } }
@@ -21,7 +21,7 @@ const v = require('../validations');
  *   post:
  *     summary: Buat open bill (status OPEN). Stok TIDAK dikurangi sampai dibayar.
  *     tags: [OpenBill]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
  *       content:
@@ -48,13 +48,13 @@ const v = require('../validations');
  *   get:
  *     summary: Detail open bill (header + item)
  *     tags: [OpenBill]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Detail }, 404: { description: Tidak ditemukan / merchant lain } }
  *   put:
  *     summary: Ubah open bill (hanya status OPEN) - ganti item & info
  *     tags: [OpenBill]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Diperbarui } }
  *
@@ -62,7 +62,7 @@ const v = require('../validations');
  *   post:
  *     summary: Bayar open bill (OPEN -> PAID). Membuat transaksi penjualan + kurangi stok.
  *     tags: [OpenBill]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Dibayar } }
  *
@@ -70,7 +70,7 @@ const v = require('../validations');
  *   post:
  *     summary: Batalkan open bill (OPEN -> CANCELLED)
  *     tags: [OpenBill]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Dibatalkan } }
  */

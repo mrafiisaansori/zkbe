@@ -13,14 +13,14 @@ const v = require('../validations');
  *   get:
  *     summary: Sesi kas yang sedang terbuka milik kasir yang login (null bila tidak ada)
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses: { 200: { description: Sesi aktif } }
  *
  * /kas-shift:
  *   get:
  *     summary: Daftar sesi kas (filter status/kasir/tanggal)
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: query, name: status, schema: { type: string, enum: [OPEN, CLOSED] } }
  *       - { in: query, name: id_user, schema: { type: integer } }
@@ -30,14 +30,14 @@ const v = require('../validations');
  *   post:
  *     summary: Buka sesi kas (input modal awal). Ditolak bila kasir masih punya sesi OPEN.
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses: { 201: { description: Sesi dibuka } }
  *
  * /kas-shift/report/daily:
  *   get:
  *     summary: Laporan harian gabungan seluruh shift pada satu tanggal
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: query, name: tanggal, required: true, schema: { type: string, format: date } }]
  *     responses: { 200: { description: Rekap harian } }
  *
@@ -45,7 +45,7 @@ const v = require('../validations');
  *   get:
  *     summary: Detail sesi kas (+ preview expected real-time bila masih OPEN)
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Detail } }
  *
@@ -53,7 +53,7 @@ const v = require('../validations');
  *   post:
  *     summary: Catat kas masuk/keluar laci (TIPE IN/OUT) selama sesi OPEN
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 201: { description: Mutasi dicatat } }
  *
@@ -61,7 +61,7 @@ const v = require('../validations');
  *   get:
  *     summary: Pratinjau perhitungan expected sebelum hitung uang fisik (tidak menyimpan)
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Expected per metode bayar } }
  *
@@ -69,7 +69,7 @@ const v = require('../validations');
  *   post:
  *     summary: Tutup sesi kas - simpan actual cash & selisih
  *     tags: [KasShift]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Sesi ditutup } }
  */

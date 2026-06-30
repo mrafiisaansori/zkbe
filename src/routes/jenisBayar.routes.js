@@ -20,13 +20,13 @@ router.use(forbidGudang);
  *   get:
  *     summary: Daftar Jenis Bayar
  *     tags: [Jenis Bayar]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200: { description: List data }
  *   post:
  *     summary: Tambah Jenis Bayar
  *     tags: [Jenis Bayar]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
  *     responses:
  *       201: { description: Data dibuat }
@@ -35,7 +35,7 @@ router.use(forbidGudang);
  *   get:
  *     summary: Detail Jenis Bayar
  *     tags: [Jenis Bayar]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Detail data }
@@ -43,7 +43,7 @@ router.use(forbidGudang);
  *   put:
  *     summary: Ubah Jenis Bayar
  *     tags: [Jenis Bayar]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     requestBody: { content: { application/json: { schema: { type: object } } } }
  *     responses:
@@ -51,7 +51,7 @@ router.use(forbidGudang);
  *   delete:
  *     summary: Hapus Jenis Bayar
  *     tags: [Jenis Bayar]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Data dihapus }

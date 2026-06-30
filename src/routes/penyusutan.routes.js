@@ -13,13 +13,13 @@ const v = require('../validations');
  *   get:
  *     summary: Riwayat penyusutan suatu produk
  *     tags: [Penyusutan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer }, description: ID produk }]
  *     responses: { 200: { description: List } }
  *   post:
  *     summary: Catat penyusutan harga jual produk
  *     tags: [Penyusutan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer }, description: ID produk }]
  *     requestBody:
  *       required: true
@@ -38,7 +38,7 @@ const v = require('../validations');
  *   delete:
  *     summary: Hapus penyusutan (kembalikan harga jual awal)
  *     tags: [Penyusutan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer }, description: ID penyusutan }]
  *     responses: { 200: { description: Dihapus } }
  */

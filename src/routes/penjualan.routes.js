@@ -13,7 +13,7 @@ const v = require('../validations');
  *   get:
  *     summary: Daftar transaksi penjualan
  *     tags: [Penjualan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: query, name: tanggal_awal, schema: { type: string, format: date } }
  *       - { in: query, name: tanggal_akhir, schema: { type: string, format: date } }
@@ -26,7 +26,7 @@ const v = require('../validations');
  *     summary: Checkout / bayar (buat transaksi penjualan)
  *     description: Meniru Kasir::bayar(). Validasi stok, simpan header + detail + rekam stok, kurangi stok produk (atomik).
  *     tags: [Penjualan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
  *       content:
@@ -62,7 +62,7 @@ const v = require('../validations');
  *   get:
  *     summary: Detail transaksi penjualan (header + item)
  *     tags: [Penjualan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Detail }, 404: { description: Tidak ditemukan } }
  *
@@ -70,7 +70,7 @@ const v = require('../validations');
  *   post:
  *     summary: Batalkan transaksi (void) & kembalikan stok
  *     tags: [Penjualan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Dibatalkan }, 400: { description: Sudah dibatalkan } }
  */

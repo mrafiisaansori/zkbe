@@ -11,12 +11,14 @@ const ctrl = require('../controllers/wilayahController');
  *   get:
  *     summary: Daftar provinsi
  *     tags: [Wilayah]
+ *     security: []
  *     responses: { 200: { description: OK } }
  *
  * /wilayah/kota:
  *   get:
  *     summary: Daftar kota/kabupaten per provinsi
  *     tags: [Wilayah]
+ *     security: []
  *     parameters:
  *       - { in: query, name: provinsi_id, required: true, schema: { type: string } }
  *     responses: { 200: { description: OK } }

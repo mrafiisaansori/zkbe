@@ -13,6 +13,7 @@ const v = require('../validations');
  *       Keamanan via verifikasi signature (sha512). merchant_id diturunkan dari
  *       order_id, bukan dari body. Setiap payload disimpan untuk audit.
  *     tags: [Payments]
+ *     security: []
  *     responses:
  *       200: { description: Notifikasi diterima }
  *       403: { description: Signature tidak valid }

@@ -18,12 +18,12 @@ router.use(requireRole(ADMIN));
  *   get:
  *     summary: Daftar pengguna
  *     tags: [Pengguna]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses: { 200: { description: List pengguna } }
  *   post:
  *     summary: Tambah pengguna
  *     tags: [Pengguna]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
  *       content:
@@ -43,20 +43,20 @@ router.use(requireRole(ADMIN));
  *   get:
  *     summary: Detail pengguna
  *     tags: [Pengguna]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: OK }, 404: { description: Tidak ditemukan } }
  *   put:
  *     summary: Ubah pengguna
  *     tags: [Pengguna]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     requestBody: { content: { application/json: { schema: { type: object } } } }
  *     responses: { 200: { description: Diperbarui } }
  *   delete:
  *     summary: Hapus pengguna
  *     tags: [Pengguna]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Dihapus } }
  *
@@ -64,7 +64,7 @@ router.use(requireRole(ADMIN));
  *   post:
  *     summary: Reset password ke default (rahasia)
  *     tags: [Pengguna]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Password direset } }
  *
@@ -72,7 +72,7 @@ router.use(requireRole(ADMIN));
  *   post:
  *     summary: Ubah password (butuh password lama)
  *     tags: [Pengguna]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     requestBody:
  *       required: true

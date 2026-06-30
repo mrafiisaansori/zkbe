@@ -12,7 +12,7 @@ const options = {
     servers: [{ url: '/api', description: 'Base path API' }],
     components: {
       securitySchemes: {
-        basicAuth: { type: 'http', scheme: 'basic' },
+        bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       },
       schemas: {
         ApiResponse: {
@@ -33,7 +33,7 @@ const options = {
         },
       },
     },
-    security: [{ basicAuth: [] }],
+    security: [{ bearerAuth: [] }],
   },
   // Gunakan forward slash agar glob bekerja di Windows (backslash dianggap escape).
   apis: [path.join(__dirname, '../src/routes/*.js').replace(/\\/g, '/')],

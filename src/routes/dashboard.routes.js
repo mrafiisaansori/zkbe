@@ -14,7 +14,7 @@ const { forbidGudang } = require('../middlewares/role');
  *   get:
  *     summary: Ringkasan dashboard (penjualan hari ini, jumlah produk/user, stok menipis)
  *     tags: [Dashboard]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200:
  *         description: Ringkasan
@@ -28,7 +28,7 @@ const { forbidGudang } = require('../middlewares/role');
  *   get:
  *     summary: Grafik laba & omzet bulanan per tahun
  *     tags: [Dashboard]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: query, name: tahun, required: true, schema: { type: integer, example: 2026 } }]
  *     responses: { 200: { description: Data 12 bulan } }
  */

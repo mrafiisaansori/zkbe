@@ -17,7 +17,7 @@ router.use(forbidGudang);
  *   get:
  *     summary: Laporan penjualan per rentang tanggal & kasir
  *     tags: [Laporan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: query, name: tanggal_awal, required: true, schema: { type: string, format: date } }
  *       - { in: query, name: tanggal_akhir, required: true, schema: { type: string, format: date } }
@@ -36,7 +36,7 @@ router.use(forbidGudang);
  *   get:
  *     summary: Laporan pendapatan / laba-rugi
  *     tags: [Laporan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - { in: query, name: tanggal_awal, required: true, schema: { type: string, format: date } }
  *       - { in: query, name: tanggal_akhir, required: true, schema: { type: string, format: date } }
@@ -54,14 +54,14 @@ router.use(forbidGudang);
  *   get:
  *     summary: Laporan stok produk + nilai stok
  *     tags: [Laporan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses: { 200: { description: Laporan stok } }
  *
  * /laporan/penyusutan:
  *   get:
  *     summary: Laporan penyusutan produk
  *     tags: [Laporan]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses: { 200: { description: Laporan penyusutan } }
  */
 router.get('/penjualan', validate(v.laporan.penjualan), ctrl.penjualan);

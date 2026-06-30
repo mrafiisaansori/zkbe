@@ -16,13 +16,13 @@ const v = require('../validations');
  *   get:
  *     summary: Daftar Kategori
  *     tags: [Kategori]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200: { description: List data }
  *   post:
  *     summary: Tambah Kategori
  *     tags: [Kategori]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
  *     responses:
  *       201: { description: Data dibuat }
@@ -31,7 +31,7 @@ const v = require('../validations');
  *   get:
  *     summary: Detail Kategori
  *     tags: [Kategori]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Detail data }
@@ -39,7 +39,7 @@ const v = require('../validations');
  *   put:
  *     summary: Ubah Kategori
  *     tags: [Kategori]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     requestBody: { content: { application/json: { schema: { type: object } } } }
  *     responses:
@@ -47,7 +47,7 @@ const v = require('../validations');
  *   delete:
  *     summary: Hapus Kategori
  *     tags: [Kategori]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Data dihapus }

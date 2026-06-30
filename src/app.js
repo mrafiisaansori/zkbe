@@ -33,6 +33,9 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
 // Swagger UI tetap di belakang Basic Auth (dokumentasi developer).
 app.use('/api-docs', basicAuth, swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   customSiteTitle: 'POS Backend API Docs',
+  swaggerOptions: {
+    persistAuthorization: true,
+  },
 }));
 app.get('/api-docs.json', basicAuth, (req, res) => res.json(swaggerSpec));
 

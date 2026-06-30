@@ -18,7 +18,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *   get:
  *     summary: Daftar produk
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: query
  *         name: search
@@ -42,7 +42,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *       Format gambar: jpg, jpeg, png, webp. Maksimal 2MB.
  *       Response menyertakan `FOTO` (path relatif) dan `FOTO_URL` (URL absolut).
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
  *       content:
@@ -90,7 +90,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *   get:
  *     summary: Detail produk
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Detail produk }
@@ -99,7 +99,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *     summary: Ubah produk (mendukung update gambar)
  *     description: Kirim multipart/form-data untuk mengganti gambar (field `foto`). Gambar lama akan dihapus otomatis.
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     requestBody:
  *       content:
@@ -127,7 +127,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *   delete:
  *     summary: Hapus produk
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Produk dihapus }
@@ -136,7 +136,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *   get:
  *     summary: Cari produk berdasarkan barcode (untuk scan kasir)
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: barcode, required: true, schema: { type: string } }]
  *     responses:
  *       200: { description: Produk ditemukan }
@@ -146,7 +146,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *   post:
  *     summary: Penyesuaian stok insidentil (tambah/kurang manual)
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     requestBody:
  *       required: true
@@ -166,7 +166,7 @@ const tenantContext = require('../middlewares/tenantContext');
  *   get:
  *     summary: Riwayat pergerakan stok produk
  *     tags: [Produk]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Riwayat stok }

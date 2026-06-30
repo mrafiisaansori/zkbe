@@ -20,13 +20,13 @@ router.use(requireRole(ADMIN));
  *   get:
  *     summary: Daftar Supplier
  *     tags: [Supplier]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200: { description: List data }
  *   post:
  *     summary: Tambah Supplier
  *     tags: [Supplier]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
  *     responses:
  *       201: { description: Data dibuat }
@@ -35,7 +35,7 @@ router.use(requireRole(ADMIN));
  *   get:
  *     summary: Detail Supplier
  *     tags: [Supplier]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Detail data }
@@ -43,7 +43,7 @@ router.use(requireRole(ADMIN));
  *   put:
  *     summary: Ubah Supplier
  *     tags: [Supplier]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     requestBody: { content: { application/json: { schema: { type: object } } } }
  *     responses:
@@ -51,7 +51,7 @@ router.use(requireRole(ADMIN));
  *   delete:
  *     summary: Hapus Supplier
  *     tags: [Supplier]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses:
  *       200: { description: Data dihapus }

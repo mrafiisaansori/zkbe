@@ -15,12 +15,12 @@ const tenantContext = require('../middlewares/tenantContext');
  *   get:
  *     summary: Ambil identitas toko
  *     tags: [Identitas]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     responses: { 200: { description: OK } }
  *   put:
  *     summary: Ubah identitas toko
  *     tags: [Identitas]
- *     security: [{ basicAuth: [] }]
+ *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       content:
  *         application/json:

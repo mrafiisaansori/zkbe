@@ -9,13 +9,13 @@ const { forbidGudang } = require('../middlewares/role');
  * @swagger
  * tags: [{ name: Voucher, description: Promo/voucher per merchant }]
  * /voucher:
- *   get: { summary: Daftar voucher, tags: [Voucher], security: [{ basicAuth: [] }], responses: { 200: { description: OK } } }
- *   post: { summary: Buat voucher, tags: [Voucher], security: [{ basicAuth: [] }], responses: { 201: { description: Dibuat } } }
+ *   get: { summary: Daftar voucher, tags: [Voucher], security: [{ bearerAuth: [] }], responses: { 200: { description: OK } } }
+ *   post: { summary: Buat voucher, tags: [Voucher], security: [{ bearerAuth: [] }], responses: { 201: { description: Dibuat } } }
  * /voucher/validate:
- *   get: { summary: Validasi & pratinjau diskon voucher, tags: [Voucher], security: [{ basicAuth: [] }], responses: { 200: { description: OK } } }
+ *   get: { summary: Validasi & pratinjau diskon voucher, tags: [Voucher], security: [{ bearerAuth: [] }], responses: { 200: { description: OK } } }
  * /voucher/{id}:
- *   put: { summary: Ubah voucher, tags: [Voucher], security: [{ basicAuth: [] }], responses: { 200: { description: OK } } }
- *   delete: { summary: Hapus voucher, tags: [Voucher], security: [{ basicAuth: [] }], responses: { 200: { description: OK } } }
+ *   put: { summary: Ubah voucher, tags: [Voucher], security: [{ bearerAuth: [] }], responses: { 200: { description: OK } } }
+ *   delete: { summary: Hapus voucher, tags: [Voucher], security: [{ bearerAuth: [] }], responses: { 200: { description: OK } } }
  */
 router.use(forbidGudang); // Voucher = fitur marketing/admin, bukan akses Gudang.
 router.use(requireProPlan);

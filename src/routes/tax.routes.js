@@ -9,8 +9,8 @@ const { forbidGudang } = require('../middlewares/role');
  * @swagger
  * tags: [{ name: Tax, description: Pengaturan PPN & service charge per merchant }]
  * /tax:
- *   get: { summary: Ambil pengaturan pajak, tags: [Tax], security: [{ basicAuth: [] }], responses: { 200: { description: OK } } }
- *   put: { summary: Ubah pengaturan pajak, tags: [Tax], security: [{ basicAuth: [] }], responses: { 200: { description: Diperbarui } } }
+ *   get: { summary: Ambil pengaturan pajak, tags: [Tax], security: [{ bearerAuth: [] }], responses: { 200: { description: OK } } }
+ *   put: { summary: Ubah pengaturan pajak, tags: [Tax], security: [{ bearerAuth: [] }], responses: { 200: { description: Diperbarui } } }
  */
 router.use(forbidGudang); // Pengaturan pajak bukan akses Gudang.
 router.use(requireProPlan);
