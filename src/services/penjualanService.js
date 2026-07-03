@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const {
-  sequelize, Penjualan, DetailPenjualan, Produk, Pengguna, JenisBayar, RekamStok, Merchant, KasShift,
+  sequelize, Penjualan, DetailPenjualan, Produk, Pengguna, JenisBayar, RekamStok, Merchant,
+  MerchantInvoiceCounter, KasShift, OpenBill, OpenBillPayment,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { todayDate, nowTime, formatNoNota } = require('../utils/helpers');
@@ -11,12 +12,34 @@ const modifierService = require('./modifierService');
 const { currentPlan, hasProFeatures, PRO_UPGRADE_MESSAGE } = require('../utils/plan');
 const { parsePagination, paginated } = require('../utils/pagination');
 
-// Nomor nota dengan prefix merchant (mis. "TZK-000025"). Unik antar merchant.
-async function buildNoNota(id) {
+// Nomor nota penjualan berurutan per merchant, mis. "TZK-000001".
+async function nextNoNota(transaction) {
   const mid = activeMerchantId();
+  if (!mid) throw new ApiError(400, 'Merchant tidak ditemukan untuk membuat nomor nota.');
   const merchant = mid ? await Merchant.findByPk(mid) : null;
   const prefix = merchant && merchant.INVOICE_PREFIX ? `${merchant.INVOICE_PREFIX}-` : '';
-  return `${prefix}${formatNoNota(id)}`;
+
+  await sequelize.query(`
+    INSERT INTO m_merchant_invoice_counter (MERCHANT_ID, LAST_NO, UPDATED_AT)
+    SELECT :mid, COALESCE(MAX(NO_NOTA_URUT), 0), NOW()
+    FROM t_penjualan
+    WHERE MERCHANT_ID = :mid
+    ON DUPLICATE KEY UPDATE
+      LAST_NO = GREATEST(LAST_NO, VALUES(LAST_NO)),
+      UPDATED_AT = NOW()
+  `, { replacements: { mid }, transaction });
+
+  const counter = await MerchantInvoiceCounter.findOne({
+    where: { MERCHANT_ID: mid },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+  if (!counter) throw new ApiError(500, 'Counter nomor nota tidak dapat dibuat.');
+
+  const noNotaUrut = (Number(counter.LAST_NO) || 0) + 1;
+  const noNota = `${prefix}${formatNoNota(noNotaUrut)}`;
+  await counter.update({ LAST_NO: noNotaUrut, UPDATED_AT: new Date() }, { transaction });
+  return { noNotaUrut, noNota };
 }
 
 // Bentuk view_penjualan (header + nama kasir + jenis bayar).
@@ -26,7 +49,7 @@ const includeHeader = [
 ];
 
 const LIST_ATTRIBUTES = [
-  'ID', 'TANGGAL', 'JAM', 'ID_JENIS_BAYAR', 'TOTAL', 'ID_USER', 'KETERANGAN',
+  'ID', 'NO_NOTA', 'NO_NOTA_URUT', 'TANGGAL', 'JAM', 'ID_JENIS_BAYAR', 'TOTAL', 'ID_USER', 'KETERANGAN',
   'DISKON', 'PPN', 'SERVICE_CHARGE', 'STATUS', 'STATUS_BAYAR', 'PAYMENT_STATUS',
 ];
 
@@ -49,6 +72,20 @@ async function list({ tanggal_awal, tanggal_akhir, id_user, id_jenis_bayar, stat
   return paginated(result.rows, result.count, pagination);
 }
 
+// Bila transaksi berasal dari Open Bill, cari siapa yang MEMBUKA bill tsb.
+// Berguna karena bill bisa dibuka di satu sesi/kasir lalu dibayar di sesi/kasir
+// lain (ID_USER & ID_SHIFT di t_penjualan selalu ikut yang MEMBAYAR) — supaya
+// kasir/admin tidak bingung melihat kasir yang beda dari yang melayani.
+async function findOpenBillOrigin(idPenjualan) {
+  const payment = await OpenBillPayment.findOne({ where: { ID_PENJUALAN: idPenjualan } });
+  const bill = await OpenBill.findOne({
+    where: payment ? { ID: payment.ID_OPEN_BILL } : { ID_PENJUALAN: idPenjualan },
+    include: [{ model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] }],
+  });
+  if (!bill) return null;
+  return { no_bill: bill.NO_BILL, dibuka_oleh: bill.kasir ? bill.kasir.NAMA : null };
+}
+
 async function getById(id) {
   const p = await Penjualan.findByPk(id, {
     include: [
@@ -57,7 +94,9 @@ async function getById(id) {
     ],
   });
   if (!p) throw new ApiError(404, 'Transaksi penjualan tidak ditemukan');
-  return p;
+  const plain = p.toJSON();
+  plain.open_bill = await findOpenBillOrigin(id);
+  return plain;
 }
 
 /**
@@ -143,8 +182,11 @@ async function checkout({
     const activeShift = id_user
       ? await KasShift.findOne({ where: { ID_USER: id_user, STATUS: 1 }, transaction: t })
       : null;
+    const { noNotaUrut, noNota } = await nextNoNota(t);
 
     const header = await Penjualan.create({
+      NO_NOTA_URUT: noNotaUrut,
+      NO_NOTA: noNota,
       TANGGAL: todayDate(),
       JAM: nowTime(),
       ID_JENIS_BAYAR: id_jenis_bayar,
@@ -162,8 +204,6 @@ async function checkout({
       PAYMENT_PROVIDER: payment ? payment.provider : null,
       PAYMENT_STATUS: payment ? (payment.status || 'PENDING') : null,
     }, { transaction: t });
-
-    const noNota = await buildNoNota(header.ID);
 
     for (const r of resolved) {
       await DetailPenjualan.create({
@@ -217,6 +257,7 @@ async function voidPenjualan(id) {
     const header = await Penjualan.findByPk(id, { transaction: t });
     if (!header) throw new ApiError(404, 'Transaksi penjualan tidak ditemukan');
     if (header.STATUS === 0) throw new ApiError(400, 'Transaksi sudah dibatalkan sebelumnya');
+    const noNota = header.NO_NOTA || formatNoNota(header.NO_NOTA_URUT || id);
 
     const details = await DetailPenjualan.findAll({ where: { ID_TRANSAKSI_PENJUALAN: id }, transaction: t });
     for (const d of details) {
@@ -225,7 +266,7 @@ async function voidPenjualan(id) {
         await produk.update({ STOK: produk.STOK + d.QTY }, { transaction: t });
         await RekamStok.create({
           ID_PRODUK: d.ID_PRODUK, JENIS: 1, QTY: d.QTY, TANGGAL: new Date(),
-          KETERANGAN: `Pembatalan Penjualan Nomor ${formatNoNota(id)}`,
+          KETERANGAN: `Pembatalan Penjualan Nomor ${noNota}`,
         }, { transaction: t });
       }
     }

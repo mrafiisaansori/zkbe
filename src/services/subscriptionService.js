@@ -1,4 +1,4 @@
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 const {
   sequelize, SubscriptionSetting, SubscriptionPayment, Merchant, Pengguna, PlanHistory,
 } = require('../models');
@@ -22,6 +22,8 @@ async function updateSetting(data) {
   const row = await getSetting();
   const map = {
     PRICE_MONTHLY: data.price_monthly,
+    PRICE_3_MONTHS: data.price_3_months,
+    PRICE_6_MONTHS: data.price_6_months,
     PRICE_YEARLY: data.price_yearly,
     PRICE_BUSINESS_MONTHLY: data.price_business_monthly,
     PRICE_BUSINESS_YEARLY: data.price_business_yearly,
@@ -41,17 +43,26 @@ async function expireStale() {
   );
 }
 
+// Paket PRO: BULANAN (1 bulan), 3_BULAN, 6_BULAN, TAHUNAN (12 bulan).
+// Paket BUSINESS tetap 2 tier (bulanan/tahunan) — dipesan manual via WhatsApp,
+// tidak lewat createPayment(), jadi cukup 2 opsi seperti semula.
 function packagePrice(setting, targetPlan, paket) {
   if (targetPlan === 'BUSINESS') {
     return paket === 'TAHUNAN'
       ? Number(setting.PRICE_BUSINESS_YEARLY)
       : Number(setting.PRICE_BUSINESS_MONTHLY);
   }
-  return paket === 'TAHUNAN' ? Number(setting.PRICE_YEARLY) : Number(setting.PRICE_MONTHLY);
+  if (paket === 'TAHUNAN') return Number(setting.PRICE_YEARLY);
+  if (paket === '6_BULAN') return Number(setting.PRICE_6_MONTHS);
+  if (paket === '3_BULAN') return Number(setting.PRICE_3_MONTHS);
+  return Number(setting.PRICE_MONTHLY); // BULANAN
 }
 
 function durationMonths(paket) {
-  return paket === 'TAHUNAN' ? 12 : 1;
+  if (paket === 'TAHUNAN') return 12;
+  if (paket === '6_BULAN') return 6;
+  if (paket === '3_BULAN') return 3;
+  return 1; // BULANAN
 }
 
 function parseGatewayExpiry(value, fallbackHours) {
@@ -282,6 +293,75 @@ async function getPaymentAdmin(id) {
   return row;
 }
 
+// Joi.date().iso() meng-koersi query string 'YYYY-MM-DD' menjadi objek Date —
+// normalisasi balik ke 'YYYY-MM-DD' (pakai komponen UTC, karena itulah yang
+// dipakai Joi saat parsing) sebelum dirakit jadi string batas awal/akhir hari.
+// Tanpa ini, template literal `${date}` menghasilkan string Date.toString()
+// yang tidak valid untuk MySQL (lihat pola sama di kasShiftService.dayBounds).
+function toYMD(value) {
+  if (value instanceof Date) {
+    return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+// ===== Laporan Pendapatan (Super Admin) =====
+// Pendapatan platform dari pembayaran upgrade PRO/BUSINESS yang LUNAS (STATUS=PAID),
+// lintas seluruh merchant. Read-only, tidak mengubah alur pembayaran manapun.
+async function revenueSummary({ tanggal_awal, tanggal_akhir } = {}) {
+  const where = { STATUS: 'PAID' };
+  if (tanggal_awal && tanggal_akhir) {
+    where.PAID_AT = { [Op.between]: [`${toYMD(tanggal_awal)} 00:00:00`, `${toYMD(tanggal_akhir)} 23:59:59`] };
+  }
+  const payments = await SubscriptionPayment.findAll({
+    where,
+    include: [{ model: Merchant, as: 'merchant', attributes: ['ID', 'NAMA'] }],
+    order: [['PAID_AT', 'DESC']],
+  });
+
+  const byPlanMap = new Map();
+  let total_revenue = 0;
+  payments.forEach((p) => {
+    total_revenue += Number(p.TOTAL_BAYAR) || 0;
+    const key = `${p.TARGET_PLAN || 'PRO'}_${p.PAKET || 'BULANAN'}`;
+    const current = byPlanMap.get(key) || { plan: p.TARGET_PLAN || 'PRO', paket: p.PAKET, jumlah: 0, total: 0 };
+    current.jumlah += 1;
+    current.total += Number(p.TOTAL_BAYAR) || 0;
+    byPlanMap.set(key, current);
+  });
+
+  return {
+    filter: { tanggal_awal, tanggal_akhir },
+    total_revenue,
+    jumlah_pembayaran: payments.length,
+    by_plan: Array.from(byPlanMap.values()),
+    payments,
+  };
+}
+
+// Grafik pendapatan bulanan (1 tahun) — dipakai chart laporan pendapatan.
+async function revenueChart(tahun) {
+  const selectedYear = Number(tahun) || new Date().getFullYear();
+  const data = Array.from({ length: 12 }, (_, i) => ({ bulan: i + 1, revenue: 0 }));
+  const rows = await SubscriptionPayment.findAll({
+    attributes: [
+      [literal('MONTH(`PAID_AT`)'), 'bulan'],
+      [literal('COALESCE(SUM(`TOTAL_BAYAR`), 0)'), 'revenue'],
+    ],
+    where: {
+      STATUS: 'PAID',
+      PAID_AT: { [Op.between]: [`${selectedYear}-01-01 00:00:00`, `${selectedYear}-12-31 23:59:59`] },
+    },
+    group: [literal('MONTH(`PAID_AT`)')],
+    raw: true,
+  });
+  rows.forEach((r) => {
+    const idx = Number(r.bulan) - 1;
+    if (data[idx]) data[idx].revenue = Number(r.revenue) || 0;
+  });
+  return { tahun: selectedYear, data };
+}
+
 module.exports = {
   getSetting,
   updateSetting,
@@ -291,4 +371,6 @@ module.exports = {
   billing,
   listAllPayments,
   getPaymentAdmin,
+  revenueSummary,
+  revenueChart,
 };

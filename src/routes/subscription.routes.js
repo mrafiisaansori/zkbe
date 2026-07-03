@@ -25,4 +25,8 @@ router.get('/payment/:id/status', requireRole(ADMIN), validate(v.subscription.st
 router.get('/payments', requireSuperadmin, ctrl.listPayments);
 router.get('/payments/:id', requireSuperadmin, ctrl.getPayment);
 
+// ----- Super admin: laporan pendapatan platform (read-only) -----
+router.get('/revenue', requireSuperadmin, validate(v.subscription.revenue), ctrl.revenueSummary);
+router.get('/revenue/chart', requireSuperadmin, validate(v.subscription.revenueChart), ctrl.revenueChart);
+
 module.exports = router;

@@ -8,7 +8,7 @@ const { LOW_STOCK_THRESHOLD, LOW_STOCK_LIMIT, LOW_STOCK_ORDER } = require('../ut
 const { parsePagination, paginated } = require('../utils/pagination');
 
 const PENJUALAN_LIST_ATTRIBUTES = [
-  'ID', 'TANGGAL', 'JAM', 'ID_JENIS_BAYAR', 'TOTAL', 'ID_USER',
+  'ID', 'NO_NOTA', 'NO_NOTA_URUT', 'TANGGAL', 'JAM', 'ID_JENIS_BAYAR', 'TOTAL', 'ID_USER',
   'KETERANGAN', 'DISKON', 'PPN', 'SERVICE_CHARGE', 'STATUS', 'STATUS_BAYAR',
 ];
 
@@ -16,10 +16,11 @@ const PENJUALAN_LIST_ATTRIBUTES = [
  * Laporan penjualan - meniru getPenjualanByKasirAndTanggal() / filterLaporanPenjualan().
  * Filter: rentang tanggal, kasir (id_user / 'all'), status.
  */
-async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', id_jenis_bayar, status = 1, page, limit }) {
+async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', id_jenis_bayar, id_shift, status = 1, page, limit }) {
   const where = { TANGGAL: { [Op.between]: [tanggal_awal, tanggal_akhir] }, STATUS: status };
   if (id_user && id_user !== 'all') where.ID_USER = id_user;
   if (id_jenis_bayar) where.ID_JENIS_BAYAR = id_jenis_bayar;
+  if (id_shift) where.ID_SHIFT = id_shift;
 
   const [agg = {}] = await Penjualan.findAll({
     where,
@@ -64,7 +65,7 @@ async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', id_jeni
   const total_service = Number(agg.total_service) || 0;
   const omzet = total_dibayar - total_ppn - total_service;
   const payload = {
-    filter: { tanggal_awal, tanggal_akhir, id_user, id_jenis_bayar, status },
+    filter: { tanggal_awal, tanggal_akhir, id_user, id_jenis_bayar, id_shift, status },
     jumlah_transaksi: Number(agg.jumlah_transaksi) || 0,
     omzet,                 // penjualan bersih (tanpa pajak & service)
     total_ppn,            // PPN terkumpul (titipan pajak)

@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Merchant, Pengguna, Penjualan, PlanHistory } = require('../models');
 const ApiError = require('../utils/ApiError');
+const { assertInvoicePrefixUnique } = require('../utils/invoicePrefix');
 
 const ALLOWED_STATUS = ['active', 'suspended', 'pending'];
 
@@ -59,6 +60,14 @@ async function updateOwn(merchantId, data) {
     const dup = await Merchant.findOne({ where: { SLUG: slug, ID: { [Op.ne]: merchantId } } });
     if (dup) throw new ApiError(409, 'Slug sudah dipakai toko lain, pilih yang lain.');
   }
+  let invoicePrefix;
+  if (data.invoice_prefix !== undefined) {
+    try {
+      invoicePrefix = await assertInvoicePrefixUnique(data.invoice_prefix, { excludeMerchantId: merchantId });
+    } catch (err) {
+      throw new ApiError(err.statusCode || 422, err.message);
+    }
+  }
 
   const map = {
     NAMA: data.store_name ?? data.nama,
@@ -68,7 +77,7 @@ async function updateOwn(merchantId, data) {
     CITY: data.city,
     PROVINCE: data.province,
     BUSINESS_CATEGORY: data.business_category,
-    INVOICE_PREFIX: data.invoice_prefix,
+    INVOICE_PREFIX: invoicePrefix,
     SLUG: slug,
   };
   Object.keys(map).forEach((k) => { if (map[k] === undefined) delete map[k]; });

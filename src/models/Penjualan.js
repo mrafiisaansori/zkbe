@@ -5,6 +5,8 @@ const sequelize = require('../config/database');
 // STATUS_BAYAR: status pembayaran (LUNAS/PAID, dll). Default LUNAS karena POS membayar di muka.
 const Penjualan = sequelize.define('t_penjualan', {
   ID: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  NO_NOTA_URUT: { type: DataTypes.INTEGER },
+  NO_NOTA: { type: DataTypes.STRING(50) },
   TANGGAL: { type: DataTypes.DATEONLY },
   JAM: { type: DataTypes.TIME },
   ID_JENIS_BAYAR: { type: DataTypes.INTEGER },

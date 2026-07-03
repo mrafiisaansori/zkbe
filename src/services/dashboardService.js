@@ -99,7 +99,7 @@ async function summaryFresh() {
   // Transaksi terbaru (5) — Penjualan ter-scope (find).
   const transaksiTerbaru = await Penjualan.findAll({
     where: { STATUS: 1 },
-    attributes: ['ID', 'TANGGAL', 'JAM', 'TOTAL'],
+    attributes: ['ID', 'NO_NOTA', 'NO_NOTA_URUT', 'TANGGAL', 'JAM', 'TOTAL'],
     include: [{ model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] }],
     order: [['ID', 'DESC']],
     limit: 5,
@@ -233,7 +233,7 @@ async function gudangSummary() {
     }),
     Penjualan.findAll({
       where: { STATUS: 1 },
-      attributes: ['ID', 'TANGGAL', 'JAM'], // tanpa TOTAL/laba — info keuangan disembunyikan
+      attributes: ['ID', 'NO_NOTA', 'NO_NOTA_URUT', 'TANGGAL', 'JAM'], // tanpa TOTAL/laba — info keuangan disembunyikan
       include: [{ model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] }],
       order: [['ID', 'DESC']], limit: 5,
     }),

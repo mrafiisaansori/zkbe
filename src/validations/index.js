@@ -286,6 +286,8 @@ module.exports = {
     setting: {
       body: Joi.object({
         price_monthly: Joi.number().integer().min(0),
+        price_3_months: Joi.number().integer().min(0),
+        price_6_months: Joi.number().integer().min(0),
         price_yearly: Joi.number().integer().min(0),
         price_business_monthly: Joi.number().integer().min(0),
         price_business_yearly: Joi.number().integer().min(0),
@@ -297,11 +299,22 @@ module.exports = {
     create: {
       body: Joi.object({
         plan: Joi.string().valid('PRO', 'BUSINESS').required(),
-        paket: Joi.string().valid('BULANAN', 'TAHUNAN').required(),
+        paket: Joi.string().valid('BULANAN', '3_BULAN', '6_BULAN', 'TAHUNAN').required(),
       }),
     },
     status: {
       params: idParam.params,
+    },
+    revenue: {
+      query: Joi.object({
+        tanggal_awal: Joi.date().iso(),
+        tanggal_akhir: Joi.date().iso(),
+      }),
+    },
+    revenueChart: {
+      query: Joi.object({
+        tahun: Joi.number().integer().min(2000).max(2100),
+      }),
     },
   },
 
@@ -567,6 +580,7 @@ module.exports = {
         tanggal_akhir: Joi.date().iso().required(),
         id_user: Joi.alternatives(Joi.number().integer(), Joi.string().valid('all')).default('all'),
         id_jenis_bayar: Joi.number().integer(),
+        id_shift: Joi.number().integer(),
         status: Joi.number().valid(0, 1).default(1),
         ...paginationQuery,
       }),

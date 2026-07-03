@@ -31,6 +31,7 @@ const PaymentGatewaySetting = require('./PaymentGatewaySetting');
 const PaymentLog = require('./PaymentLog');
 const PaymentWebhookLog = require('./PaymentWebhookLog');
 const Merchant = require('./Merchant');
+const MerchantInvoiceCounter = require('./MerchantInvoiceCounter');
 const RegistrationOtp = require('./RegistrationOtp');
 const PasswordResetOtp = require('./PasswordResetOtp');
 const EmailChangeOtp = require('./EmailChangeOtp');
@@ -103,6 +104,8 @@ Merchant.hasMany(Pengguna, { foreignKey: 'MERCHANT_ID', sourceKey: 'ID', as: 'pe
 Pengguna.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
 Merchant.hasMany(Penjualan, { foreignKey: 'MERCHANT_ID', sourceKey: 'ID', as: 'penjualan' });
 Penjualan.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
+Merchant.hasOne(MerchantInvoiceCounter, { foreignKey: 'MERCHANT_ID', sourceKey: 'ID', as: 'invoiceCounter' });
+MerchantInvoiceCounter.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
 
 // ===== Closing / Sesi Kas (Shift) =====
 KasShift.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'kasir' });
@@ -125,6 +128,7 @@ KasShift.hasMany(Penjualan, { foreignKey: 'ID_SHIFT', sourceKey: 'ID', as: 'penj
   TaxSetting, Voucher, SubscriptionPayment, Meja,
   ModifierGroup, ModifierOption, ProdukModifier,
   PaymentGatewaySetting, PaymentLog,
+  MerchantInvoiceCounter,
   KasShift, KasShiftDetail, KasMutasi,
 ].forEach((m) => scopeModel(m));
 // Catatan: Merchant, RegistrationOtp, SubscriptionSetting TIDAK di-scope
@@ -141,6 +145,6 @@ module.exports = {
   TaxSetting, Voucher, SubscriptionSetting, SubscriptionPayment, Meja,
   ModifierGroup, ModifierOption, ProdukModifier,
   PaymentGatewaySetting, PaymentLog, PaymentWebhookLog,
-  Merchant, RegistrationOtp, PasswordResetOtp, EmailChangeOtp, PlanHistory, Provinsi, Kota,
+  Merchant, MerchantInvoiceCounter, RegistrationOtp, PasswordResetOtp, EmailChangeOtp, PlanHistory, Provinsi, Kota,
   KasShift, KasShiftDetail, KasMutasi,
 };

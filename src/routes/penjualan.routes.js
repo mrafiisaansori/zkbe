@@ -55,7 +55,7 @@ const v = require('../validations');
  *             example:
  *               success: true
  *               message: Transaksi penjualan berhasil
- *               data: { id: 25, no_nota: "000025", subtotal: 24000, diskon: 0, total: 24000, bayar: 50000, kembalian: 26000 }
+ *               data: { id: 25, no_nota: "TZK-000001", subtotal: 24000, diskon: 0, total: 24000, bayar: 50000, kembalian: 26000 }
  *       400: { description: Stok kurang / keranjang kosong / bayar kurang }
  *
  * /penjualan/{id}:

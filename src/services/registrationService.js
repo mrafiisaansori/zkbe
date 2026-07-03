@@ -6,16 +6,12 @@ const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/password');
 const { generateOtp, hashOtp, verifyOtp } = require('../utils/otp');
 const { sendOtpEmail } = require('../utils/mailer');
+const { makeInvoicePrefix } = require('../utils/invoicePrefix');
 const env = require('../config/env');
 
 const norm = (s) => String(s || '').trim();
 const normEmail = (s) => norm(s).toLowerCase();
 const normPhone = (s) => norm(s).replace(/[^\d+]/g, '');
-
-function makeInvoicePrefix(storeName) {
-  const base = norm(storeName).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
-  return base || 'TK';
-}
 
 // Pastikan email & nomor HP unik (lintas merchant) dan username belum dipakai.
 async function assertUnique({ email, phone, username }) {
@@ -119,6 +115,7 @@ async function verifyOtpAndActivate({ email, otp }) {
   await assertUnique({ email: p.email, phone: p.phone, username: p.username });
 
   const result = await sequelize.transaction(async (t) => {
+    const invoicePrefix = await makeInvoicePrefix(p.store_name, { transaction: t });
     const merchant = await Merchant.create({
       NAMA: p.store_name,
       OWNER_NAME: p.owner_name,
@@ -128,7 +125,7 @@ async function verifyOtpAndActivate({ email, otp }) {
       CITY: p.city,
       PROVINCE: p.province,
       BUSINESS_CATEGORY: p.business_category,
-      INVOICE_PREFIX: makeInvoicePrefix(p.store_name),
+      INVOICE_PREFIX: invoicePrefix,
       STATUS: 'active',
     }, { transaction: t });
 

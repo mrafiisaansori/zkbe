@@ -51,4 +51,13 @@ module.exports = {
 
   getPayment: catchAsync(async (req, res) =>
     success(res, { data: safePayment(await svc.getPaymentAdmin(req.params.id)) })),
+
+  revenueSummary: catchAsync(async (req, res) => {
+    const result = await svc.revenueSummary(req.query);
+    result.payments = result.payments.map(safePayment);
+    return success(res, { data: result });
+  }),
+
+  revenueChart: catchAsync(async (req, res) =>
+    success(res, { data: await svc.revenueChart(req.query.tahun) })),
 };

@@ -8,6 +8,8 @@ const SubscriptionSetting = sequelize.define('m_subscription_setting', {
   QRIS_IMAGE: { type: DataTypes.TEXT },                 // path relatif: uploads/subscription/<file>
   QRIS_LABEL: { type: DataTypes.STRING(150) },          // nama tampil QRIS (opsional)
   PRICE_MONTHLY: { type: DataTypes.INTEGER, defaultValue: 0 },
+  PRICE_3_MONTHS: { type: DataTypes.INTEGER, defaultValue: 0 },
+  PRICE_6_MONTHS: { type: DataTypes.INTEGER, defaultValue: 0 },
   PRICE_YEARLY: { type: DataTypes.INTEGER, defaultValue: 0 },
   PRICE_BUSINESS_MONTHLY: { type: DataTypes.INTEGER, defaultValue: 0 },
   PRICE_BUSINESS_YEARLY: { type: DataTypes.INTEGER, defaultValue: 0 },
