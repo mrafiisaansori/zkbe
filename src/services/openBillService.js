@@ -348,6 +348,10 @@ async function pay(id, { id_jenis_bayar, bayar, keterangan, diskon = 0, id_user 
 async function payPartial(id, {
   payer_name, items, id_jenis_bayar, bayar, keterangan, diskon = 0, id_user,
 }) {
+  // Split Bill adalah fitur PRO. Dicek di sini (bukan cuma di frontend) supaya
+  // tetap aman walau merchant sempat PRO lalu turun ke FREE (plan expired) saat
+  // bill masih terbuka.
+  await assertPro();
   return sequelize.transaction(async (t) => {
     const bill = await OpenBill.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
     if (!bill) throw new ApiError(404, 'Open bill tidak ditemukan');
