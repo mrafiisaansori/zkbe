@@ -31,6 +31,11 @@ function authHeader(serverKey) {
   return `Basic ${Buffer.from(`${serverKey}:`).toString('base64')}`;
 }
 
+function notificationUrl() {
+  if (!env.appUrl) return '';
+  return `${env.appUrl.replace(/\/$/, '')}/api/midtrans/notification`;
+}
+
 /**
  * Buat charge QRIS dinamis di Midtrans.
  * @returns { orderId, transactionId, status, qrString, qrUrl, expiryTime, raw }
@@ -52,6 +57,7 @@ async function chargeQris({ orderId, grossAmount, customerName, setting }) {
     qris: { acquirer: 'gopay' },
     customer_details: customerName ? { first_name: String(customerName).slice(0, 50) } : undefined,
   };
+  const overrideNotification = notificationUrl();
 
   const res = await fetch(`${baseUrl(isProduction)}/v2/charge`, {
     method: 'POST',
@@ -59,6 +65,7 @@ async function chargeQris({ orderId, grossAmount, customerName, setting }) {
       Accept: 'application/json',
       'Content-Type': 'application/json',
       Authorization: authHeader(serverKey),
+      ...(overrideNotification ? { 'X-Override-Notification': overrideNotification } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -66,7 +73,10 @@ async function chargeQris({ orderId, grossAmount, customerName, setting }) {
   const raw = await res.json().catch(() => ({}));
   // status_code '201' = transaksi berhasil dibuat (pending pembayaran).
   if (!res.ok || !['200', '201'].includes(String(raw.status_code))) {
-    const err = new Error(raw.status_message || 'Gagal membuat transaksi QRIS Midtrans.');
+    const gatewayMessage = raw.status_message || raw.validation_messages || raw.error_messages;
+    const err = new Error(Array.isArray(gatewayMessage)
+      ? gatewayMessage.join(', ')
+      : (gatewayMessage || 'Gagal membuat transaksi QRIS Midtrans.'));
     err.statusCode = 502;
     err.raw = raw;
     throw err;
