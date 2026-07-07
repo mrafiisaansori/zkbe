@@ -85,10 +85,17 @@ async function chargeQris({
       ? gatewayMessage.join(', ')
       : (gatewayMessage || 'Gagal membuat transaksi QRIS Midtrans.');
     const err = new Error(raw.status_code === '402'
-      ? 'Channel QRIS Midtrans production belum aktif. Aktifkan QRIS/GoPay QRIS di dashboard Midtrans atau hubungi support Midtrans.'
+      ? 'Midtrans menolak payment_type=qris untuk Core API/POS. Pastikan QRIS/GoPay Dynamic QRIS aktif untuk Core API merchant ini, lalu konfirmasi ke support Midtrans dengan error ID di log.'
       : (raw.status_code ? `Midtrans ${raw.status_code}: ${message}` : message));
     err.statusCode = raw.status_code === '402' ? 503 : 502;
-    err.raw = raw;
+    err.raw = {
+      midtrans: raw,
+      request: {
+        url: `${baseUrl(isProduction)}/v2/charge`,
+        body,
+        xOverrideNotification: overrideNotification || null,
+      },
+    };
     throw err;
   }
 
