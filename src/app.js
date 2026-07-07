@@ -50,6 +50,7 @@ app.use('/api/public', require('./routes/public.routes'));
 
 // Webhook/notification Midtrans PUBLIK (tanpa JWT). Keamanan via signature.
 // HARUS di-mount SEBELUM authJwt agar tidak ditolak 401. merchant_id dari order_id.
+app.use('/api/midtrans', require('./routes/midtransPublic.routes'));
 app.use('/api/payments', require('./routes/paymentPublic.routes'));
 app.use('/api/subscription', require('./routes/subscriptionPublic.routes'));
 
