@@ -201,6 +201,12 @@ async function createPayment({ plan, paket }) {
       orderId,
       grossAmount: price,
       customerName: merchant ? merchant.NAMA : undefined,
+      itemDetails: [{
+        id: `SUB-${targetPlan}-${paket}`,
+        price,
+        quantity: 1,
+        name: `Upgrade ${targetPlan} ${paket}`.slice(0, 50),
+      }],
     });
     await row.update({
       MIDTRANS_TRANSACTION_ID: charge.transactionId,

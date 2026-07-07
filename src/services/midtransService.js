@@ -40,10 +40,18 @@ function notificationUrl() {
  * Buat charge QRIS dinamis di Midtrans.
  * @returns { orderId, transactionId, status, qrString, qrUrl, expiryTime, raw }
  */
-async function chargeQris({ orderId, grossAmount, customerName, setting }) {
+async function chargeQris({
+  orderId, grossAmount, customerName, itemDetails, setting,
+}) {
   const { serverKey, isProduction } = resolveCredentials(setting);
   if (!serverKey) {
     const err = new Error('Kredensial Midtrans (SERVER_KEY) belum dikonfigurasi di server.');
+    err.statusCode = 503;
+    throw err;
+  }
+  const overrideNotification = notificationUrl();
+  if (isProduction && !overrideNotification) {
+    const err = new Error('APP_URL backend publik wajib diisi untuk X-Override-Notification Midtrans production.');
     err.statusCode = 503;
     throw err;
   }
@@ -54,10 +62,9 @@ async function chargeQris({ orderId, grossAmount, customerName, setting }) {
       order_id: orderId,
       gross_amount: Math.round(Number(grossAmount)), // QRIS hanya menerima bilangan bulat
     },
-    qris: { acquirer: 'gopay' },
     customer_details: customerName ? { first_name: String(customerName).slice(0, 50) } : undefined,
+    item_details: Array.isArray(itemDetails) && itemDetails.length ? itemDetails : undefined,
   };
-  const overrideNotification = notificationUrl();
 
   const res = await fetch(`${baseUrl(isProduction)}/v2/charge`, {
     method: 'POST',
@@ -74,10 +81,13 @@ async function chargeQris({ orderId, grossAmount, customerName, setting }) {
   // status_code '201' = transaksi berhasil dibuat (pending pembayaran).
   if (!res.ok || !['200', '201'].includes(String(raw.status_code))) {
     const gatewayMessage = raw.status_message || raw.validation_messages || raw.error_messages;
-    const err = new Error(Array.isArray(gatewayMessage)
+    const message = Array.isArray(gatewayMessage)
       ? gatewayMessage.join(', ')
-      : (gatewayMessage || 'Gagal membuat transaksi QRIS Midtrans.'));
-    err.statusCode = 502;
+      : (gatewayMessage || 'Gagal membuat transaksi QRIS Midtrans.');
+    const err = new Error(raw.status_code === '402'
+      ? 'Channel QRIS Midtrans production belum aktif. Aktifkan QRIS/GoPay QRIS di dashboard Midtrans atau hubungi support Midtrans.'
+      : (raw.status_code ? `Midtrans ${raw.status_code}: ${message}` : message));
+    err.statusCode = raw.status_code === '402' ? 503 : 502;
     err.raw = raw;
     throw err;
   }
