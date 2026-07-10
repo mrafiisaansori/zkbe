@@ -23,8 +23,10 @@ const SubscriptionPayment = sequelize.define('m_subscription_payment', {
   GATEWAY_MERCHANT_ID: { type: DataTypes.STRING(50) },
   MIDTRANS_ORDER_ID: { type: DataTypes.STRING(100) },
   MIDTRANS_TRANSACTION_ID: { type: DataTypes.STRING(100) },
-  QR_STRING: { type: DataTypes.TEXT },
-  QR_URL: { type: DataTypes.TEXT },
+  QR_STRING: { type: DataTypes.TEXT },  // legacy Core API QRIS - dipertahankan untuk riwayat lama
+  QR_URL: { type: DataTypes.TEXT },     // legacy Core API QRIS - dipertahankan untuk riwayat lama
+  SNAP_TOKEN: { type: DataTypes.TEXT },
+  SNAP_REDIRECT_URL: { type: DataTypes.TEXT },
   RAW_RESPONSE: { type: DataTypes.TEXT('long') },
   LAST_NOTIFICATION: { type: DataTypes.TEXT('long') },
   ACTIVATED_AT: { type: DataTypes.DATE },

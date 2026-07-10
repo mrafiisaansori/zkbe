@@ -65,15 +65,6 @@ function durationMonths(paket) {
   return 1; // BULANAN
 }
 
-function parseGatewayExpiry(value, fallbackHours) {
-  if (value) {
-    const normalized = String(value).trim().replace(' ', 'T').replace(/ ([+-]\d{4})$/, '$1');
-    const parsed = new Date(normalized);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-  return new Date(Date.now() + fallbackHours * 3600 * 1000);
-}
-
 function extendExpiry(current, months) {
   const now = new Date();
   const base = current && new Date(current) > now ? new Date(current) : now;
@@ -197,10 +188,11 @@ async function createPayment({ plan, paket }) {
   await row.update({ MIDTRANS_ORDER_ID: orderId });
 
   try {
-    const charge = await billingMidtrans.chargeQris({
+    const snap = await billingMidtrans.createSnapTransaction({
       orderId,
       grossAmount: price,
       customerName: merchant ? merchant.NAMA : undefined,
+      expiryMinutes: ttlHours * 60,
       itemDetails: [{
         id: `SUB-${targetPlan}-${paket}`,
         price,
@@ -209,17 +201,15 @@ async function createPayment({ plan, paket }) {
       }],
     });
     await row.update({
-      MIDTRANS_TRANSACTION_ID: charge.transactionId,
-      QR_STRING: charge.qrString,
-      QR_URL: charge.qrUrl,
-      EXPIRES_AT: parseGatewayExpiry(charge.expiryTime, ttlHours),
-      RAW_RESPONSE: JSON.stringify(charge.raw),
+      SNAP_TOKEN: snap.token,
+      SNAP_REDIRECT_URL: snap.redirectUrl,
+      RAW_RESPONSE: JSON.stringify(snap.raw),
     });
     return row;
   } catch (error) {
     await row.update({
       STATUS: 'FAILED',
-      REJECT_REASON: error.message || 'Gagal membuat QRIS Midtrans.',
+      REJECT_REASON: error.message || 'Gagal membuat transaksi Snap Midtrans.',
       RAW_RESPONSE: JSON.stringify(error.raw || { message: error.message }),
     });
     throw error;
@@ -274,6 +264,9 @@ async function billing() {
     status_toko: merchant ? merchant.STATUS : null,
     payments,
     latest: payments[0] || null,
+    // Client key Midtrans bersifat publik (bukan rahasia) - dibutuhkan frontend untuk memuat Snap.js.
+    midtrans_client_key: env.billingMidtrans.clientKey,
+    midtrans_is_production: env.billingMidtrans.isProduction,
   };
 }
 

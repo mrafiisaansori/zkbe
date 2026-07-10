@@ -11,6 +11,9 @@ const midtrans = require('./midtransService');
 const modifierService = require('./modifierService');
 const { parsePagination, paginated } = require('../utils/pagination');
 
+// ponytail: window checkout split bill tetap 30 menit, samakan dengan paymentService.
+const SNAP_TTL_MINUTES = 30;
+
 // Open Bill hanya untuk plan PRO/BUSINESS. Divalidasi di backend (bukan sekadar UI).
 async function assertPro() {
   const plan = await currentPlan();
@@ -460,7 +463,7 @@ async function createPartialQris(id, {
       ID_PENJUALAN: result.id,
       PROVIDER: 'midtrans',
       ORDER_ID: orderId,
-      EVENT: 'split_bill_charge_request',
+      EVENT: 'split_bill_snap_create_request',
       PAYMENT_STATUS: 'PENDING',
       AMOUNT: result.total,
       RAW: JSON.stringify({ order_id: orderId, gross_amount: result.total, no_bill: bill.NO_BILL }),
@@ -468,20 +471,17 @@ async function createPartialQris(id, {
 
     const setting = await PaymentGatewaySetting.findOne({ transaction: t });
     try {
-      const charge = await midtrans.chargeQris({
+      const snap = await midtrans.createSnapTransaction({
         orderId,
         grossAmount: result.total,
         customerName: customer_name || payer_name || bill.CUSTOMER_NAME,
+        expiryMinutes: SNAP_TTL_MINUTES,
         setting,
       });
 
-      const expiredAt = charge.expiryTime ? new Date(charge.expiryTime.replace(' ', 'T')) : null;
+      const expiredAt = new Date(Date.now() + SNAP_TTL_MINUTES * 60000);
       await Penjualan.update(
-        {
-          MIDTRANS_TRANSACTION_ID: charge.transactionId,
-          PAYMENT_STATUS: 'PENDING',
-          EXPIRED_AT: Number.isNaN(expiredAt?.getTime()) ? null : expiredAt,
-        },
+        { PAYMENT_STATUS: 'PENDING', EXPIRED_AT: expiredAt },
         { where: { ID: result.id }, transaction: t },
       );
 
@@ -489,11 +489,10 @@ async function createPartialQris(id, {
         ID_PENJUALAN: result.id,
         PROVIDER: 'midtrans',
         ORDER_ID: orderId,
-        TRANSACTION_ID: charge.transactionId,
-        EVENT: 'split_bill_charge_response',
+        EVENT: 'split_bill_snap_create_response',
         PAYMENT_STATUS: 'PENDING',
         AMOUNT: result.total,
-        RAW: JSON.stringify(charge.raw),
+        RAW: JSON.stringify(snap.raw),
       }, { transaction: t });
 
       return {
@@ -503,13 +502,15 @@ async function createPartialQris(id, {
         provider: 'midtrans',
         payment_status: 'PENDING',
         gross_amount: result.total,
-        qr_string: charge.qrString,
-        qr_url: charge.qrUrl,
-        expiry_time: charge.expiryTime,
+        snap_token: snap.token,
+        redirect_url: snap.redirectUrl,
+        client_key: snap.clientKey,
+        is_production: snap.isProduction,
+        expiry_minutes: SNAP_TTL_MINUTES,
       };
     } catch (err) {
       try { await penjualanService.voidPenjualan(result.id); } catch (_) { /* abaikan */ }
-      throw new ApiError(err.statusCode || 502, err.message || 'Gagal membuat QRIS Midtrans.');
+      throw new ApiError(err.statusCode || 502, err.message || 'Gagal membuat transaksi Snap Midtrans.');
     }
   });
 }

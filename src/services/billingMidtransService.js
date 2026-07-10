@@ -25,8 +25,8 @@ function parseOrderId(orderId) {
   return { merchantId: Number(match[1]), paymentId: Number(match[2]) };
 }
 
-function chargeQris(params) {
-  return midtrans.chargeQris({ ...params, setting: gatewaySetting() });
+function createSnapTransaction(params) {
+  return midtrans.createSnapTransaction({ ...params, setting: gatewaySetting() });
 }
 
 function getStatus(orderId) {
@@ -41,7 +41,7 @@ module.exports = {
   gatewaySetting,
   buildOrderId,
   parseOrderId,
-  chargeQris,
+  createSnapTransaction,
   getStatus,
   verifySignature,
   mapStatus: midtrans.mapStatus,

@@ -7,6 +7,9 @@ const { currentPlan, isBusiness } = require('../utils/plan');
 const penjualanService = require('./penjualanService');
 const midtrans = require('./midtransService');
 
+// ponytail: window checkout POS tetap 30 menit, jadikan setting kalau perlu dikustom per merchant.
+const SNAP_TTL_MINUTES = 30;
+
 // Hanya merchant BUSINESS yang boleh memakai QRIS dinamis Midtrans.
 // Divalidasi di BACKEND (bukan sekadar UI). merchant_id selalu dari token login.
 async function assertBusiness() {
@@ -69,29 +72,26 @@ async function createQris(payload) {
 
   await PaymentLog.create({
     ID_PENJUALAN: trx.id, PROVIDER: 'midtrans', ORDER_ID: orderId,
-    EVENT: 'charge_request', PAYMENT_STATUS: 'PENDING', AMOUNT: trx.total,
+    EVENT: 'snap_create_request', PAYMENT_STATUS: 'PENDING', AMOUNT: trx.total,
     RAW: JSON.stringify({ order_id: orderId, gross_amount: trx.total, no_nota: trx.no_nota }),
   });
 
   try {
-    const charge = await midtrans.chargeQris({
-      orderId, grossAmount: trx.total, customerName: payload.customer_name, setting,
+    const snap = await midtrans.createSnapTransaction({
+      orderId, grossAmount: trx.total, customerName: payload.customer_name,
+      expiryMinutes: SNAP_TTL_MINUTES, setting,
     });
 
-    const expiredAt = charge.expiryTime ? new Date(charge.expiryTime.replace(' ', 'T')) : null;
+    const expiredAt = new Date(Date.now() + SNAP_TTL_MINUTES * 60000);
     await Penjualan.update(
-      {
-        MIDTRANS_TRANSACTION_ID: charge.transactionId,
-        PAYMENT_STATUS: 'PENDING',
-        EXPIRED_AT: Number.isNaN(expiredAt?.getTime()) ? null : expiredAt,
-      },
+      { PAYMENT_STATUS: 'PENDING', EXPIRED_AT: expiredAt },
       { where: { ID: trx.id } },
     );
 
     await PaymentLog.create({
       ID_PENJUALAN: trx.id, PROVIDER: 'midtrans', ORDER_ID: orderId,
-      TRANSACTION_ID: charge.transactionId, EVENT: 'charge_response',
-      PAYMENT_STATUS: 'PENDING', AMOUNT: trx.total, RAW: JSON.stringify(charge.raw),
+      EVENT: 'snap_create_response',
+      PAYMENT_STATUS: 'PENDING', AMOUNT: trx.total, RAW: JSON.stringify(snap.raw),
     });
 
     return {
@@ -101,19 +101,21 @@ async function createQris(payload) {
       provider: 'midtrans',
       payment_status: 'PENDING',
       gross_amount: trx.total,
-      qr_string: charge.qrString,
-      qr_url: charge.qrUrl,
-      expiry_time: charge.expiryTime,
+      snap_token: snap.token,
+      redirect_url: snap.redirectUrl,
+      client_key: snap.clientKey,
+      is_production: snap.isProduction,
+      expiry_minutes: SNAP_TTL_MINUTES,
     };
   } catch (err) {
     // Gateway gagal -> batalkan transaksi & kembalikan stok agar tidak menggantung.
     try { await penjualanService.voidPenjualan(trx.id); } catch (_) { /* abaikan */ }
     await PaymentLog.create({
       ID_PENJUALAN: trx.id, PROVIDER: 'midtrans', ORDER_ID: orderId,
-      EVENT: 'charge_error', PAYMENT_STATUS: 'FAILED', AMOUNT: trx.total,
+      EVENT: 'snap_create_error', PAYMENT_STATUS: 'FAILED', AMOUNT: trx.total,
       RAW: JSON.stringify(err.raw || { message: err.message }),
     }).catch(() => {});
-    throw new ApiError(err.statusCode || 502, err.message || 'Gagal membuat QRIS Midtrans.');
+    throw new ApiError(err.statusCode || 502, err.message || 'Gagal membuat transaksi Snap Midtrans.');
   }
 }
 

@@ -1,6 +1,7 @@
 const svc = require('../services/subscriptionService');
 const catchAsync = require('../utils/catchAsync');
 const { success, created } = require('../utils/response');
+const env = require('../config/env');
 
 function safePayment(row) {
   if (!row) return row;
@@ -8,6 +9,11 @@ function safePayment(row) {
   delete plain.RAW_RESPONSE;
   delete plain.LAST_NOTIFICATION;
   delete plain.QR_STRING;
+  if (plain.PROVIDER === 'midtrans') {
+    // Client key Midtrans bersifat publik - dibutuhkan frontend untuk memuat Snap.js.
+    plain.MIDTRANS_CLIENT_KEY = env.billingMidtrans.clientKey;
+    plain.MIDTRANS_IS_PRODUCTION = env.billingMidtrans.isProduction;
+  }
   return plain;
 }
 

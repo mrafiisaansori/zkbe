@@ -466,6 +466,7 @@ const schemas = {
   },
   QrisPaymentData: {
     type: 'object',
+    description: 'Hasil pembuatan transaksi Midtrans Snap. Frontend memuat Snap.js dengan client_key/is_production lalu memanggil window.snap.pay(snap_token).',
     properties: {
       transaction_id: { type: 'integer', example: 10 },
       no_nota: { type: 'string', example: 'ZK-000010' },
@@ -473,9 +474,11 @@ const schemas = {
       provider: { type: 'string', example: 'midtrans' },
       payment_status: { type: 'string', example: 'PENDING' },
       gross_amount: { type: 'number', example: 25000 },
-      qr_string: { type: 'string', nullable: true },
-      qr_url: { type: 'string', nullable: true, format: 'uri' },
-      expiry_time: { type: 'string', nullable: true },
+      snap_token: { type: 'string', description: 'Token untuk window.snap.pay() / window.snap.embed() di frontend.' },
+      redirect_url: { type: 'string', nullable: true, format: 'uri', description: 'Alternatif: redirect penuh ke halaman Snap tanpa popup.' },
+      client_key: { type: 'string', description: 'Client key Midtrans (publik) untuk memuat Snap.js.' },
+      is_production: { type: 'boolean' },
+      expiry_minutes: { type: 'integer', example: 30 },
     },
   },
   MidtransNotification: {
@@ -1500,11 +1503,11 @@ const paths = {
   '/payments/midtrans/qris/create': {
     post: op({
       tags: ['Payment Gateway'],
-      summary: 'Buat pembayaran QRIS Midtrans untuk transaksi POS',
-      description: 'Khusus merchant plan BUSINESS. Backend membuat transaksi penjualan PENDING lalu charge Core API Midtrans.',
+      summary: 'Buat pembayaran Midtrans Snap untuk transaksi POS',
+      description: 'Khusus merchant plan BUSINESS. Backend membuat transaksi penjualan PENDING lalu membuat transaksi Snap Midtrans (GoPay, QRIS, VA bank, dll sesuai channel aktif).',
       requestBody: jsonBody(ref('PaymentQrisRequest')),
       responses: withErrors({
-        201: createdResponse('QRIS Midtrans dibuat.', ref('QrisPaymentData')),
+        201: createdResponse('Transaksi Snap Midtrans dibuat.', ref('QrisPaymentData')),
         502: responseRef('BadGateway'),
         503: responseRef('ServiceUnavailable'),
       }, { notFound: true }),
@@ -1607,12 +1610,12 @@ const paths = {
   '/open-bill/{id}/pay-partial/qris/create': {
     post: op({
       tags: ['Open Bill'],
-      summary: 'Buat QRIS Midtrans untuk split bill',
+      summary: 'Buat transaksi Snap Midtrans untuk split bill',
       description: 'Khusus BUSINESS. Pembayaran split dibuat PENDING sampai webhook Midtrans settle.',
       parameters: [idParam('ID open bill')],
       requestBody: jsonBody(ref('OpenBillPartialQrisRequest')),
       responses: withErrors({
-        200: apiResponse('QRIS split bill dibuat.', ref('QrisPaymentData')),
+        200: apiResponse('Transaksi Snap split bill dibuat.', ref('QrisPaymentData')),
         502: responseRef('BadGateway'),
         503: responseRef('ServiceUnavailable'),
       }, { notFound: true }),
@@ -1774,10 +1777,10 @@ const paths = {
     post: op({
       tags: ['Subscription'],
       summary: 'Buat pembayaran upgrade plan',
-      description: 'Admin Merchant. Saat ini upgrade BUSINESS via endpoint ini ditolak service dan diarahkan via WhatsApp.',
+      description: 'Admin Merchant. Saat ini upgrade BUSINESS via endpoint ini ditolak service dan diarahkan via WhatsApp. Response berisi SNAP_TOKEN + MIDTRANS_CLIENT_KEY untuk window.snap.pay() di frontend.',
       requestBody: jsonBody(ref('SubscriptionPaymentRequest')),
       responses: withErrors({
-        201: createdResponse('QRIS upgrade plan berhasil dibuat.', { type: 'object' }),
+        201: createdResponse('Transaksi Snap upgrade plan berhasil dibuat.', { type: 'object' }),
         502: responseRef('BadGateway'),
         503: responseRef('ServiceUnavailable'),
       }, { conflict: true }),
@@ -2271,7 +2274,7 @@ module.exports = {
     { name: 'QRIS', description: 'Pengaturan QRIS statis toko.' },
     { name: 'Pengguna', description: 'Manajemen pengguna merchant.' },
     { name: 'Penjualan', description: 'Checkout dan riwayat penjualan.' },
-    { name: 'Payment Gateway', description: 'Midtrans QRIS dinamis dan webhook.' },
+    { name: 'Payment Gateway', description: 'Midtrans Snap (GoPay, QRIS, VA bank, dll) dan webhook.' },
     { name: 'Open Bill', description: 'Open bill, split bill, dan pembayaran bill.' },
     { name: 'Kas Shift', description: 'Shift kas, mutasi, closing, dan laporan harian.' },
     { name: 'Tax', description: 'PPN dan service charge.' },

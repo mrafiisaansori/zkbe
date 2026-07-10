@@ -2,15 +2,20 @@ const crypto = require('crypto');
 const env = require('../config/env');
 
 // =====================================================================
-// Midtrans Core API client (QRIS dinamis).
+// Midtrans client - transaksi dibuat via Snap (bukan Core API /v2/charge),
+// karena akses Core API per-channel (mis. payment_type=qris) butuh aktivasi
+// terpisah oleh Midtrans meski channel sudah aktif di dashboard. Snap
+// otomatis menampilkan semua channel yang aktif di dashboard merchant.
 // SERVER_KEY hanya dipakai di sini (backend). Tidak pernah ke frontend.
-// Sandbox: https://api.sandbox.midtrans.com ; Production: https://api.midtrans.com
+// Status/notification tetap pakai Core API (sama untuk transaksi Snap).
 // Kredensial diambil dari ENV global, dengan opsi override per merchant
 // (m_payment_gateway_setting) bila merchant punya akun Midtrans sendiri.
 // =====================================================================
 
 const SANDBOX_BASE = 'https://api.sandbox.midtrans.com';
 const PRODUCTION_BASE = 'https://api.midtrans.com';
+const SNAP_SANDBOX_BASE = 'https://app.sandbox.midtrans.com';
+const SNAP_PRODUCTION_BASE = 'https://app.midtrans.com';
 
 // Resolusi kredensial: pakai setting merchant bila lengkap, jika tidak pakai ENV.
 function resolveCredentials(setting) {
@@ -26,6 +31,10 @@ function baseUrl(isProduction) {
   return isProduction ? PRODUCTION_BASE : SANDBOX_BASE;
 }
 
+function snapBaseUrl(isProduction) {
+  return isProduction ? SNAP_PRODUCTION_BASE : SNAP_SANDBOX_BASE;
+}
+
 function authHeader(serverKey) {
   // Basic auth: base64(serverKey + ':') sesuai dokumentasi Midtrans.
   return `Basic ${Buffer.from(`${serverKey}:`).toString('base64')}`;
@@ -37,13 +46,15 @@ function notificationUrl() {
 }
 
 /**
- * Buat charge QRIS dinamis di Midtrans.
- * @returns { orderId, transactionId, status, qrString, qrUrl, expiryTime, raw }
+ * Buat transaksi Snap (checkout page/popup Midtrans). Snap menampilkan semua
+ * channel yang sudah diaktifkan merchant di dashboard (GoPay, QRIS, VA bank,
+ * kartu, dll) tanpa perlu akses Core API terpisah per channel.
+ * @returns { orderId, token, redirectUrl, clientKey, isProduction, raw }
  */
-async function chargeQris({
-  orderId, grossAmount, customerName, itemDetails, setting,
+async function createSnapTransaction({
+  orderId, grossAmount, customerName, itemDetails, expiryMinutes, setting,
 }) {
-  const { serverKey, isProduction } = resolveCredentials(setting);
+  const { serverKey, clientKey, isProduction } = resolveCredentials(setting);
   if (!serverKey) {
     const err = new Error('Kredensial Midtrans (SERVER_KEY) belum dikonfigurasi di server.');
     err.statusCode = 503;
@@ -57,16 +68,16 @@ async function chargeQris({
   }
 
   const body = {
-    payment_type: 'qris',
     transaction_details: {
       order_id: orderId,
-      gross_amount: Math.round(Number(grossAmount)), // QRIS hanya menerima bilangan bulat
+      gross_amount: Math.round(Number(grossAmount)),
     },
     customer_details: customerName ? { first_name: String(customerName).slice(0, 50) } : undefined,
     item_details: Array.isArray(itemDetails) && itemDetails.length ? itemDetails : undefined,
+    expiry: expiryMinutes ? { unit: 'minutes', duration: Math.max(1, Math.round(expiryMinutes)) } : undefined,
   };
 
-  const res = await fetch(`${baseUrl(isProduction)}/v2/charge`, {
+  const res = await fetch(`${snapBaseUrl(isProduction)}/snap/v1/transactions`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -78,20 +89,17 @@ async function chargeQris({
   });
 
   const raw = await res.json().catch(() => ({}));
-  // status_code '201' = transaksi berhasil dibuat (pending pembayaran).
-  if (!res.ok || !['200', '201'].includes(String(raw.status_code))) {
-    const gatewayMessage = raw.status_message || raw.validation_messages || raw.error_messages;
+  if (!res.ok || !raw.token) {
+    const gatewayMessage = raw.error_messages || raw.status_message;
     const message = Array.isArray(gatewayMessage)
       ? gatewayMessage.join(', ')
-      : (gatewayMessage || 'Gagal membuat transaksi QRIS Midtrans.');
-    const err = new Error(raw.status_code === '402'
-      ? 'Midtrans menolak payment_type=qris untuk Core API/POS. Pastikan QRIS/GoPay Dynamic QRIS aktif untuk Core API merchant ini, lalu konfirmasi ke support Midtrans dengan error ID di log.'
-      : (raw.status_code ? `Midtrans ${raw.status_code}: ${message}` : message));
-    err.statusCode = raw.status_code === '402' ? 503 : 502;
+      : (gatewayMessage || 'Gagal membuat transaksi Snap Midtrans.');
+    const err = new Error(message);
+    err.statusCode = 502;
     err.raw = {
       midtrans: raw,
       request: {
-        url: `${baseUrl(isProduction)}/v2/charge`,
+        url: `${snapBaseUrl(isProduction)}/snap/v1/transactions`,
         body,
         xOverrideNotification: overrideNotification || null,
       },
@@ -99,17 +107,12 @@ async function chargeQris({
     throw err;
   }
 
-  // Ambil URL gambar QR dari array actions (rel: generate-qr-code).
-  const actions = Array.isArray(raw.actions) ? raw.actions : [];
-  const qrAction = actions.find((a) => a.name === 'generate-qr-code') || actions[0];
-
   return {
-    orderId: raw.order_id || orderId,
-    transactionId: raw.transaction_id || null,
-    status: raw.transaction_status || 'pending',
-    qrString: raw.qr_string || null,
-    qrUrl: qrAction ? qrAction.url : null,
-    expiryTime: raw.expiry_time || null,
+    orderId,
+    token: raw.token,
+    redirectUrl: raw.redirect_url || null,
+    clientKey,
+    isProduction,
     raw,
   };
 }
@@ -184,5 +187,5 @@ function isFinalStatus(localStatus) {
 }
 
 module.exports = {
-  chargeQris, getTransactionStatus, verifySignature, mapStatus, isFinalStatus, resolveCredentials,
+  createSnapTransaction, getTransactionStatus, verifySignature, mapStatus, isFinalStatus, resolveCredentials,
 };
