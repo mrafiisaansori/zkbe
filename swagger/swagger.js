@@ -1794,6 +1794,15 @@ const paths = {
       responses: withErrors({ 200: apiResponse('Status pembayaran subscription.', { type: 'object' }) }, { notFound: true }),
     }),
   },
+  '/subscription/payment/{id}/cancel': {
+    post: op({
+      tags: ['Subscription'],
+      summary: 'Batalkan pembayaran upgrade plan yang masih PENDING',
+      description: 'Admin Merchant. Membatalkan tagihan Snap Midtrans yang belum dibayar (di Midtrans + lokal), agar bisa langsung membuat tagihan baru tanpa menunggu kedaluwarsa.',
+      parameters: [idParam('ID pembayaran subscription')],
+      responses: withErrors({ 200: apiResponse('Pembayaran dibatalkan.', { type: 'object' }) }, { notFound: true }),
+    }),
+  },
   '/subscription/payments': {
     get: op({
       tags: ['Subscription'],

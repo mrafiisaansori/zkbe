@@ -46,6 +46,9 @@ module.exports = {
   paymentStatus: catchAsync(async (req, res) =>
     success(res, { data: safePayment(await svc.getPaymentStatus(req.params.id)) })),
 
+  cancelPayment: catchAsync(async (req, res) =>
+    success(res, { data: safePayment(await svc.cancelPayment(req.params.id)), message: 'Pembayaran dibatalkan' })),
+
   notification: catchAsync(async (req, res) => {
     const result = await svc.handleNotification(req.body);
     return res.status(200).json({ success: true, ...result });

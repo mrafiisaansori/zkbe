@@ -230,6 +230,20 @@ async function getPaymentStatus(id) {
   return SubscriptionPayment.findByPk(row.ID);
 }
 
+// Merchant membatalkan tagihan yang belum dibayar, agar bisa langsung buat tagihan
+// baru tanpa menunggu kedaluwarsa otomatis (createPayment menolak bila masih ada PENDING).
+async function cancelPayment(id) {
+  const row = await SubscriptionPayment.findByPk(id);
+  if (!row) throw new ApiError(404, 'Pembayaran tidak ditemukan.');
+  if (row.STATUS !== 'PENDING') throw new ApiError(400, 'Hanya pembayaran yang masih menunggu yang bisa dibatalkan.');
+
+  if (row.PROVIDER === 'midtrans' && row.MIDTRANS_ORDER_ID) {
+    try { await billingMidtrans.cancelTransaction(row.MIDTRANS_ORDER_ID); } catch (_) { /* abaikan, tetap batalkan lokal */ }
+  }
+  await row.update({ STATUS: 'CANCELLED', REJECT_REASON: 'Dibatalkan oleh merchant.' });
+  return row;
+}
+
 async function handleNotification(body) {
   const parsed = billingMidtrans.parseOrderId(body.order_id);
   if (!parsed) throw new ApiError(400, 'order_id billing tidak valid.');
@@ -366,6 +380,7 @@ module.exports = {
   updateSetting,
   createPayment,
   getPaymentStatus,
+  cancelPayment,
   handleNotification,
   billing,
   listAllPayments,

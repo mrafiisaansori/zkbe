@@ -20,6 +20,7 @@ router.put('/setting', requireSuperadmin, validate(v.subscription.setting), ctrl
 router.get('/billing', ctrl.billing);
 router.post('/payment', requireRole(ADMIN), validate(v.subscription.create), ctrl.createPayment);
 router.get('/payment/:id/status', requireRole(ADMIN), validate(v.subscription.status), ctrl.paymentStatus);
+router.post('/payment/:id/cancel', requireRole(ADMIN), validate(v.subscription.status), ctrl.cancelPayment);
 
 // ----- Super admin: kelola pembayaran langganan -----
 router.get('/payments', requireSuperadmin, ctrl.listPayments);

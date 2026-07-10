@@ -140,6 +140,24 @@ async function getTransactionStatus({ orderId, setting }) {
 }
 
 /**
+ * Batalkan transaksi pending di Midtrans (Core API /v2/{order_id}/cancel).
+ * Dipakai saat merchant membatalkan tagihan yang belum dibayar, agar mereka bisa
+ * langsung buat tagihan baru tanpa menunggu kedaluwarsa otomatis.
+ * @returns { transactionStatus, raw } | null (null bila transaksi tidak ditemukan di Midtrans - aman diabaikan)
+ */
+async function cancelTransaction({ orderId, setting }) {
+  const { serverKey, isProduction } = resolveCredentials(setting);
+  if (!serverKey) return null;
+  const res = await fetch(`${baseUrl(isProduction)}/v2/${encodeURIComponent(orderId)}/cancel`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', Authorization: authHeader(serverKey) },
+  });
+  const raw = await res.json().catch(() => ({}));
+  if (!res.ok) return null;
+  return { transactionStatus: raw.transaction_status || null, raw };
+}
+
+/**
  * Verifikasi signature webhook Midtrans:
  * signature_key = sha512(order_id + status_code + gross_amount + server_key).
  */
@@ -187,5 +205,5 @@ function isFinalStatus(localStatus) {
 }
 
 module.exports = {
-  createSnapTransaction, getTransactionStatus, verifySignature, mapStatus, isFinalStatus, resolveCredentials,
+  createSnapTransaction, getTransactionStatus, cancelTransaction, verifySignature, mapStatus, isFinalStatus, resolveCredentials,
 };

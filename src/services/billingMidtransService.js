@@ -33,6 +33,10 @@ function getStatus(orderId) {
   return midtrans.getTransactionStatus({ orderId, setting: gatewaySetting() });
 }
 
+function cancelTransaction(orderId) {
+  return midtrans.cancelTransaction({ orderId, setting: gatewaySetting() });
+}
+
 function verifySignature(payload) {
   return midtrans.verifySignature({ ...payload, setting: gatewaySetting() });
 }
@@ -43,6 +47,7 @@ module.exports = {
   parseOrderId,
   createSnapTransaction,
   getStatus,
+  cancelTransaction,
   verifySignature,
   mapStatus: midtrans.mapStatus,
   isFinalStatus: midtrans.isFinalStatus,
