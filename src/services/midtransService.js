@@ -118,6 +118,63 @@ async function createSnapTransaction({
 }
 
 /**
+ * Charge GoPay langsung via Core API /v2/charge (BUKAN Snap) - dipakai KHUSUS
+ * alat test superadmin buat lihat QR mentahnya (tanpa layar pilih metode bayar
+ * ala Snap). SENGAJA terpisah dari createSnapTransaction: seperti dicatat di
+ * komentar atas file ini, akses Core API per-channel butuh aktivasi terpisah
+ * dari Midtrans meski channel aktif di dashboard - kalau gagal di sini, itu
+ * BUKAN berarti GoPay QRIS Aggregator tidak aktif, bisa jadi Core API-nya sendiri
+ * belum diaktifkan Midtrans buat akun ini. Jangan dipakai buat alur pembayaran
+ * asli (langganan/POS) - tetap pakai createSnapTransaction untuk itu.
+ * @returns { orderId, transactionStatus, qrImageUrl, qrString, raw }
+ */
+async function chargeGopayQris({ orderId, grossAmount, setting }) {
+  const { serverKey, isProduction } = resolveCredentials(setting);
+  if (!serverKey) {
+    const err = new Error('Kredensial Midtrans (SERVER_KEY) belum dikonfigurasi di server.');
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const body = {
+    payment_type: 'gopay',
+    transaction_details: { order_id: orderId, gross_amount: Math.round(Number(grossAmount)) },
+    gopay: { enable_callback: false },
+  };
+
+  const res = await fetch(`${baseUrl(isProduction)}/v2/charge`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: authHeader(serverKey),
+    },
+    body: JSON.stringify(body),
+  });
+
+  const raw = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const gatewayMessage = raw.error_messages || raw.status_message;
+    const message = Array.isArray(gatewayMessage)
+      ? gatewayMessage.join(', ')
+      : (gatewayMessage || 'Gagal charge GoPay QRIS via Core API.');
+    const err = new Error(message);
+    err.statusCode = 502;
+    err.raw = raw;
+    throw err;
+  }
+
+  const qrAction = (raw.actions || []).find((a) => a.name === 'generate-qr-code');
+  return {
+    orderId,
+    transactionStatus: raw.transaction_status || null,
+    qrImageUrl: qrAction ? qrAction.url : null,
+    qrString: raw.qr_string || null,
+    raw,
+  };
+}
+
+/**
  * Cek status transaksi langsung ke Midtrans (dipakai saat polling agar tetap
  * jalan walau webhook belum sampai — berguna untuk demo sandbox di localhost).
  * @returns { transactionStatus, fraudStatus, transactionId, raw } | null
@@ -205,5 +262,5 @@ function isFinalStatus(localStatus) {
 }
 
 module.exports = {
-  createSnapTransaction, getTransactionStatus, cancelTransaction, verifySignature, mapStatus, isFinalStatus, resolveCredentials,
+  createSnapTransaction, chargeGopayQris, getTransactionStatus, cancelTransaction, verifySignature, mapStatus, isFinalStatus, resolveCredentials,
 };

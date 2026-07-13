@@ -28,6 +28,7 @@ router.use('/penyusutan', require('./penyusutan.routes'));
 router.use('/transaksi-keuangan', require('./transaksi.routes'));
 router.use('/laporan', require('./laporan.routes'));
 router.use('/dashboard', require('./dashboard.routes'));
+router.use('/midtrans-test', require('./midtransTest.routes'));
 
 router.get('/', (req, res) => res.json({
   success: true,

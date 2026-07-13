@@ -1786,6 +1786,27 @@ const paths = {
       }, { conflict: true }),
     }),
   },
+  '/midtrans-test/gopay-qris': {
+    post: op({
+      tags: ['MidtransTest'],
+      summary: 'Charge GoPay Rp1 via Core API (cek GoPay QRIS Aggregator)',
+      description: 'Khusus Super Admin. Pakai akun Midtrans BILLING (bukan akun QRIS merchant), lewat Core API /v2/charge (BUKAN Snap) supaya QR-nya langsung tampil tanpa layar pilih metode bayar. Tidak menyimpan data apapun ke database - order_id sengaja tidak match format pembayaran langganan asli, jadi webhook Midtrans untuk transaksi ini otomatis ditolak (400) kalau kebetulan masuk. Catatan: berbeda dari Snap, akses Core API per-channel kadang butuh aktivasi terpisah dari Midtrans - kalau endpoint ini gagal, belum tentu berarti aggregator tidak aktif.',
+      responses: withErrors({
+        200: apiResponse('QR GoPay test Rp1 berhasil dibuat.', {
+          type: 'object',
+          properties: {
+            order_id: { type: 'string', example: 'ZKBTEST-1783471143474' },
+            transaction_status: { type: 'string', nullable: true, example: 'pending' },
+            qr_image_url: { type: 'string', nullable: true, description: 'URL gambar QR (Midtrans generate-qr-code action).' },
+            qr_string: { type: 'string', nullable: true, description: 'Payload QRIS mentah, kalau Midtrans mengembalikannya.' },
+            raw: { type: 'object', description: 'Respons mentah Midtrans /v2/charge, buat diagnosa.' },
+          },
+        }),
+        502: responseRef('BadGateway'),
+        503: responseRef('ServiceUnavailable'),
+      }),
+    }),
+  },
   '/subscription/payment/{id}/status': {
     get: op({
       tags: ['Subscription'],
@@ -2289,6 +2310,7 @@ module.exports = {
     { name: 'Tax', description: 'PPN dan service charge.' },
     { name: 'Voucher', description: 'Voucher dan validasi diskon.' },
     { name: 'Subscription', description: 'Billing plan dan pembayaran upgrade.' },
+    { name: 'MidtransTest', description: 'Alat internal Super Admin buat ngecek status channel pembayaran Midtrans (bukan fitur bisnis, tidak nyimpan data).' },
     { name: 'Meja', description: 'Master meja dan QR token.' },
     { name: 'Modifier', description: 'Modifier/varian produk.' },
     { name: 'Pembelian', description: 'Dokumen pembelian dan stok masuk.' },

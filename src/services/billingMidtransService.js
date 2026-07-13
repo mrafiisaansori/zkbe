@@ -29,6 +29,11 @@ function createSnapTransaction(params) {
   return midtrans.createSnapTransaction({ ...params, setting: gatewaySetting() });
 }
 
+// Khusus alat test superadmin (lihat midtransTestService.js) - bukan alur pembayaran asli.
+function chargeGopayQris(params) {
+  return midtrans.chargeGopayQris({ ...params, setting: gatewaySetting() });
+}
+
 function getStatus(orderId) {
   return midtrans.getTransactionStatus({ orderId, setting: gatewaySetting() });
 }
@@ -46,6 +51,7 @@ module.exports = {
   buildOrderId,
   parseOrderId,
   createSnapTransaction,
+  chargeGopayQris,
   getStatus,
   cancelTransaction,
   verifySignature,
