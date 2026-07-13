@@ -9,7 +9,7 @@ const { activeMerchantId } = require('../utils/tenancy');
 const taxService = require('./taxService');
 const voucherService = require('./voucherService');
 const modifierService = require('./modifierService');
-const { currentPlan, hasProFeatures, PRO_UPGRADE_MESSAGE } = require('../utils/plan');
+const { currentPlan, hasProFeatures } = require('../utils/plan');
 const { parsePagination, paginated } = require('../utils/pagination');
 
 // Nomor nota penjualan berurutan per merchant, mis. "TZK-000001".
@@ -126,7 +126,9 @@ async function checkout({
   const tax = proEnabled
     ? await taxService.get()
     : { PPN_ENABLED: false, PPN_PERSEN: 0, SERVICE_ENABLED: false, SERVICE_PERSEN: 0 };
-  if (kode_voucher && !proEnabled) throw new ApiError(403, PRO_UPGRADE_MESSAGE);
+  // Voucher yang SUDAH DIBUAT tetap bisa dipakai di semua plan (cuma bikin
+  // voucher baru yang dibatasi PRO - lihat voucherService.create()). Validitas
+  // kode/tanggal/minimal transaksi tetap dicek normal di voucherService di bawah.
 
   const run = async (t) => {
     // Ambil & validasi semua produk + hitung diskon per item.

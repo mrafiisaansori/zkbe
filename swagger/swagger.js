@@ -1716,11 +1716,13 @@ const paths = {
     get: op({
       tags: ['Voucher'],
       summary: 'Daftar voucher',
+      description: 'Tersedia di semua plan (termasuk FREE) - voucher yang sudah ada tetap terlihat & terkelola walau plan turun dari PRO.',
       responses: withErrors({ 200: apiResponse('Daftar voucher.', { type: 'array', items: { type: 'object' } }) }),
     }),
     post: op({
       tags: ['Voucher'],
       summary: 'Buat voucher',
+      description: 'Khusus plan PRO/BUSINESS - satu-satunya operasi voucher yang masih dibatasi plan.',
       requestBody: jsonBody(ref('VoucherCreateRequest')),
       responses: withErrors({ 201: createdResponse('Voucher dibuat.', { type: 'object' }) }, { conflict: true }),
     }),
@@ -1729,6 +1731,7 @@ const paths = {
     get: op({
       tags: ['Voucher'],
       summary: 'Validasi voucher untuk subtotal',
+      description: 'Tersedia di semua plan - dipakai saat checkout buat menerapkan kode voucher yang sudah ada.',
       parameters: [
         queryParam('kode', { type: 'string' }, 'Kode voucher.', true),
         queryParam('subtotal', { type: 'number', minimum: 0 }, 'Subtotal transaksi.', true),
@@ -1740,6 +1743,7 @@ const paths = {
     put: op({
       tags: ['Voucher'],
       summary: 'Ubah voucher',
+      description: 'Tersedia di semua plan.',
       parameters: [idParam('ID voucher')],
       requestBody: jsonBody(ref('VoucherUpdateRequest')),
       responses: withErrors({ 200: apiResponse('Voucher diperbarui.', { type: 'object' }) }, { notFound: true, conflict: true }),
@@ -1747,6 +1751,7 @@ const paths = {
     delete: op({
       tags: ['Voucher'],
       summary: 'Hapus voucher',
+      description: 'Tersedia di semua plan.',
       parameters: [idParam('ID voucher')],
       responses: withErrors({ 200: deletedResponse('Voucher dihapus') }, { notFound: true, validation: false }),
     }),
