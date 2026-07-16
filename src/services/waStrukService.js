@@ -14,18 +14,39 @@ async function assertPro() {
   await assertProFeature('Kirim struk via WhatsApp hanya tersedia untuk merchant plan PRO. Upgrade ke PRO untuk mengaktifkannya.');
 }
 
+// Lebar kolom dalam blok monospace (```) - WA cuma rata rapi DI DALAM blok
+// kode, di luar itu fontnya proporsional jadi padding manual percuma. Karena
+// itu semua baris yang butuh rata kolom (item + rincian total) digabung jadi
+// SATU blok kode; baris info & footer sengaja dibiarkan teks natural.
+const LABEL_WIDTH = 20;
+const AMOUNT_WIDTH = 10;
+const SEPARATOR = '-'.repeat(LABEL_WIDTH + AMOUNT_WIDTH);
+
 function padEndSafe(str, len) {
   str = String(str);
   return str.length >= len ? `${str.slice(0, len - 1)}…` : str.padEnd(len);
 }
-function rupiahPlain(n) {
-  return (Number(n) || 0).toLocaleString('id-ID');
+function row(label, amount) {
+  const amountStr = Number(amount).toLocaleString('id-ID');
+  return padEndSafe(label, LABEL_WIDTH) + amountStr.padStart(AMOUNT_WIDTH);
+}
+function formatTanggalJam(tanggal, jam) {
+  try {
+    const d = new Date(`${tanggal}T${jam || '00:00:00'}`);
+    const tgl = d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+    const j = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return `${tgl}, ${j}`;
+  } catch (e) {
+    return `${tanggal} ${String(jam || '').slice(0, 5)}`;
+  }
 }
 
 /**
- * Susun teks struk buat WhatsApp. Item pakai blok ``` (monospace) biar kolom
- * nama & harga rata, format bold/italic pakai sintaks WA asli (*bold*, _italic_).
- * Angka & baris meniru persis Receipt.tsx (struk cetak) biar konsisten.
+ * Susun teks struk buat WhatsApp. Item + rincian total digabung dalam SATU
+ * blok ``` (monospace) biar kolom nama/label & harga rata sempurna - baris
+ * lain (header toko, info nota, footer) teks biasa karena tidak butuh rata
+ * kolom. *Total* sengaja ditaruh di LUAR blok kode supaya tetap bisa bold
+ * (format WA tidak berlaku di dalam blok kode).
  */
 function formatStrukText(trx, identitas) {
   const namaToko = identitas?.NAMA || 'Toko';
@@ -38,14 +59,19 @@ function formatStrukText(trx, identitas) {
   const ppn = Number(trx.PPN) || 0;
   const service = Number(trx.SERVICE_CHARGE) || 0;
   const total = Number(trx.TOTAL) || 0;
-  const tanggalJam = `${trx.TANGGAL} ${String(trx.JAM || '').slice(0, 5)}`;
 
-  const itemLines = items.map((d) => {
+  const blok = [];
+  items.forEach((d) => {
     const nama = d.produk?.NAMA || `Produk #${d.ID_PRODUK}`;
-    const left = padEndSafe(`${d.QTY}x ${nama}`, 18);
-    const right = rupiahPlain(d.HARGA_JUAL * d.QTY).padStart(10);
-    return left + right;
-  }).join('\n');
+    blok.push(row(`${d.QTY}x ${nama}`, d.HARGA_JUAL * d.QTY));
+  });
+  blok.push(SEPARATOR);
+  blok.push(row('Subtotal', subtotal));
+  if (diskonItem > 0) blok.push(row('Diskon item', -diskonItem));
+  if (diskon > 0) blok.push(row('Diskon', -diskon));
+  if (diskonVoucher > 0) blok.push(row(`Voucher${trx.KODE_VOUCHER ? ` (${trx.KODE_VOUCHER})` : ''}`, -diskonVoucher));
+  if (ppn > 0) blok.push(row('PPN', ppn));
+  if (service > 0) blok.push(row('Service', service));
 
   const lines = [
     '🧾 *STRUK BELANJA*',
@@ -53,22 +79,17 @@ function formatStrukText(trx, identitas) {
   ];
   if (alamat) lines.push(alamat);
   lines.push('');
-  lines.push(`No. Nota : ${trx.NO_NOTA}`);
-  lines.push(`Tanggal  : ${tanggalJam}`);
-  lines.push(`Kasir    : ${trx.kasir?.NAMA || '-'}`);
-  lines.push('```');
-  lines.push(itemLines || '-');
-  lines.push('```');
-  lines.push(`Subtotal : ${formatRupiah(subtotal)}`);
-  if (diskonItem > 0) lines.push(`Diskon item : -${formatRupiah(diskonItem)}`);
-  if (diskon > 0) lines.push(`Diskon   : -${formatRupiah(diskon)}`);
-  if (diskonVoucher > 0) lines.push(`Voucher${trx.KODE_VOUCHER ? ` (${trx.KODE_VOUCHER})` : ''} : -${formatRupiah(diskonVoucher)}`);
-  if (ppn > 0) lines.push(`PPN      : ${formatRupiah(ppn)}`);
-  if (service > 0) lines.push(`Service  : ${formatRupiah(service)}`);
-  lines.push(`*Total    : ${formatRupiah(total)}*`);
+  lines.push(`No. Nota: ${trx.NO_NOTA}`);
+  lines.push(`Tanggal: ${formatTanggalJam(trx.TANGGAL, trx.JAM)}`);
+  lines.push(`Kasir: ${trx.kasir?.NAMA || '-'}`);
   lines.push('');
-  lines.push(`Metode   : ${trx.jenisBayar?.NAMA || '-'}`);
-  lines.push(`Status   : ${trx.STATUS_BAYAR || 'LUNAS'}`);
+  lines.push('```');
+  lines.push(blok.join('\n'));
+  lines.push('```');
+  lines.push(`*TOTAL: ${formatRupiah(total)}*`);
+  lines.push('');
+  lines.push(`Metode: ${trx.jenisBayar?.NAMA || '-'}`);
+  lines.push(`Status: ${trx.STATUS_BAYAR || 'LUNAS'}`);
   lines.push('');
   lines.push('Terima kasih sudah berbelanja! 🙏');
   lines.push('_Struk ini dikirim otomatis via Zona Kasir_');
