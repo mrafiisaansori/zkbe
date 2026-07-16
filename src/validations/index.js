@@ -216,6 +216,11 @@ module.exports = {
         kode_voucher: Joi.string().allow('', null),
       }),
     },
+    kirimWA: {
+      body: Joi.object({
+        nomor: Joi.string().min(9).max(20).required(),
+      }),
+    },
   },
 
   // Payment gateway (Midtrans QRIS dinamis) - khusus BUSINESS.

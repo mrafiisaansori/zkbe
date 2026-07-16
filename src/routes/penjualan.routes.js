@@ -73,10 +73,34 @@ const v = require('../validations');
  *     security: [{ bearerAuth: [] }]
  *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
  *     responses: { 200: { description: Dibatalkan }, 400: { description: Sudah dibatalkan } }
+ *
+ * /penjualan/{id}/kirim-wa:
+ *   post:
+ *     summary: Kirim struk transaksi ke WhatsApp pelanggan (khusus plan PRO ke atas)
+ *     description: Format struk sebagai teks WA (bold/monospace), dikirim lewat WA Gateway internal (wazapp.web.id).
+ *     tags: [Penjualan]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters: [{ in: path, name: id, required: true, schema: { type: integer } }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [nomor]
+ *             properties:
+ *               nomor: { type: string, example: "6281234567890", description: "Format 62xxxxxxxxxx" }
+ *     responses:
+ *       200: { description: Struk terkirim }
+ *       400: { description: Nomor tidak valid }
+ *       403: { description: Bukan plan PRO/BUSINESS }
+ *       404: { description: Transaksi tidak ditemukan }
+ *       502: { description: Gagal menghubungi WA Gateway }
  */
 router.get('/', validate(v.penjualan.list), ctrl.list);
 router.post('/checkout', validate(v.penjualan.checkout), ctrl.checkout);
 router.get('/:id', ctrl.getById);
 router.post('/:id/void', ctrl.void);
+router.post('/:id/kirim-wa', validate(v.penjualan.kirimWA), ctrl.kirimWA);
 
 module.exports = router;
