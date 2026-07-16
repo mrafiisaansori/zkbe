@@ -5,8 +5,7 @@ const { assertProFeature } = require('../utils/plan');
 const penjualanService = require('./penjualanService');
 
 const WAGATEWAY_URL = process.env.WAGATEWAY_URL || 'https://wazapp.web.id';
-const WAGATEWAY_USER = process.env.WAGATEWAY_USER;
-const WAGATEWAY_PASS = process.env.WAGATEWAY_PASS;
+const WAGATEWAY_API_KEY = process.env.WAGATEWAY_API_KEY;
 
 // Kirim struk via WA khusus plan PRO ke atas (BUSINESS otomatis ikut, superset
 // PRO) - divalidasi di BACKEND, bukan sekadar disembunyikan di UI.
@@ -97,15 +96,14 @@ function formatStrukText(trx, identitas) {
 }
 
 async function kirimKeWaGateway(nomor, pesan) {
-  if (!WAGATEWAY_USER || !WAGATEWAY_PASS) {
-    throw new ApiError(500, 'WA Gateway belum dikonfigurasi di server (WAGATEWAY_USER/WAGATEWAY_PASS kosong).');
+  if (!WAGATEWAY_API_KEY) {
+    throw new ApiError(500, 'WA Gateway belum dikonfigurasi di server (WAGATEWAY_API_KEY kosong).');
   }
-  const auth = Buffer.from(`${WAGATEWAY_USER}:${WAGATEWAY_PASS}`).toString('base64');
   let res;
   try {
     res = await fetch(`${WAGATEWAY_URL}/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${WAGATEWAY_API_KEY}` },
       body: JSON.stringify({ nomor, pesan }),
     });
   } catch (err) {
