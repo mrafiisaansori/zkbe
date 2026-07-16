@@ -119,9 +119,14 @@ async function kirimKeWaGateway(nomor, pesan) {
 async function kirimStruk(idPenjualan, nomor) {
   await assertPro();
 
-  const nomorBersih = String(nomor || '').replace(/\D/g, '');
+  let nomorBersih = String(nomor || '').replace(/\D/g, '');
+  // Normalisasi di satu tempat ini - frontend konsisten minta user isi format
+  // lokal 08xxx, tapi JID WhatsApp (dan WA Gateway) butuh kode negara 62xxx.
+  if (nomorBersih.startsWith('0')) {
+    nomorBersih = `62${nomorBersih.slice(1)}`;
+  }
   if (nomorBersih.length < 9 || nomorBersih.length > 15) {
-    throw new ApiError(400, 'Nomor WhatsApp tidak valid. Gunakan format 62812xxxxxxx.');
+    throw new ApiError(400, 'Nomor WhatsApp tidak valid. Gunakan format 08xxxxxxxxxx.');
   }
 
   const trx = await penjualanService.getById(idPenjualan);
