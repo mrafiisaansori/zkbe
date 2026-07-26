@@ -19,6 +19,7 @@ const Penjualan = sequelize.define('t_penjualan', {
   SERVICE_CHARGE: { type: DataTypes.DOUBLE, defaultValue: 0 }, // nominal service charge
   KODE_VOUCHER: { type: DataTypes.STRING(50) },
   DISKON_VOUCHER: { type: DataTypes.DOUBLE, defaultValue: 0 }, // nominal diskon voucher
+  MEMBER_ID: { type: DataTypes.INTEGER }, // FK m_member, null = transaksi tanpa member (fitur PRO)
   STATUS: { type: DataTypes.INTEGER, defaultValue: 1 },
   STATUS_BAYAR: { type: DataTypes.STRING(20), defaultValue: 'LUNAS' },
   // ===== Payment gateway (Midtrans QRIS dinamis) - khusus plan BUSINESS =====

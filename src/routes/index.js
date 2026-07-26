@@ -8,6 +8,8 @@ router.use('/account', require('./account.routes'));
 router.use('/merchant', require('./merchant.routes'));
 router.use('/produk', require('./produk.routes'));
 router.use('/kategori', require('./kategori.routes'));
+router.use('/satuan', require('./satuan.routes'));
+router.use('/member', require('./member.routes'));
 router.use('/supplier', require('./supplier.routes'));
 router.use('/jenis-bayar', require('./jenisBayar.routes'));
 router.use('/identitas', require('./identitas.routes'));

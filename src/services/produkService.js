@@ -1,12 +1,13 @@
 const { Op } = require('sequelize');
-const { sequelize, Produk, Kategori, RekamStok } = require('../models');
+const { sequelize, Produk, Kategori, Satuan, RekamStok } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { deleteProductImage } = require('../utils/fileUrl');
 const { activeMerchantId, getTenant } = require('../utils/tenancy');
 const { currentPlan, FREE_MAX_PRODUK } = require('../utils/plan');
 const { parsePagination, paginated } = require('../utils/pagination');
 
-const LIST_ATTRIBUTES = ['ID', 'NAMA', 'ID_KATEGORI', 'STOK', 'HARGA_BELI', 'HARGA_JUAL', 'BARCODE', 'FOTO'];
+const LIST_ATTRIBUTES = ['ID', 'NAMA', 'ID_KATEGORI', 'STOK', 'HARGA_BELI', 'HARGA_JUAL', 'BARCODE', 'FOTO', 'ID_SATUAN'];
+const SATUAN_INCLUDE = { model: Satuan, as: 'satuan', attributes: ['ID', 'NAMA'] };
 
 async function list({ search, category_id, page, limit } = {}) {
   const where = {};
@@ -22,7 +23,7 @@ async function list({ search, category_id, page, limit } = {}) {
   const query = {
     where,
     attributes: LIST_ATTRIBUTES,
-    include: [{ model: Kategori, as: 'kategori', attributes: ['ID', 'DESKRIPSI'] }],
+    include: [{ model: Kategori, as: 'kategori', attributes: ['ID', 'DESKRIPSI'] }, SATUAN_INCLUDE],
     order: [['NAMA', 'ASC']],
   };
 
@@ -38,7 +39,7 @@ async function list({ search, category_id, page, limit } = {}) {
 
 async function getById(id) {
   const produk = await Produk.findByPk(id, {
-    include: [{ model: Kategori, as: 'kategori', attributes: ['ID', 'DESKRIPSI'] }],
+    include: [{ model: Kategori, as: 'kategori', attributes: ['ID', 'DESKRIPSI'] }, SATUAN_INCLUDE],
   });
   if (!produk) throw new ApiError(404, 'Produk tidak ditemukan');
   return produk;
@@ -77,6 +78,7 @@ async function create(data) {
       HARGA_JUAL: data.harga_jual,
       BARCODE: data.barcode,
       FOTO: data.foto || null,
+      ID_SATUAN: data.id_satuan || null,
       ...(merchantId !== undefined ? { MERCHANT_ID: merchantId } : {}),
     }, { transaction: t });
 
@@ -115,6 +117,7 @@ async function update(id, data) {
     HARGA_JUAL: data.harga_jual ?? produk.HARGA_JUAL,
     BARCODE: data.barcode ?? produk.BARCODE,
     FOTO: newFoto,
+    ID_SATUAN: data.id_satuan !== undefined ? (data.id_satuan || null) : produk.ID_SATUAN,
   });
   // Jika gambar baru diupload, hapus gambar lama.
   if (data.foto && oldFoto && oldFoto !== data.foto) deleteProductImage(oldFoto);

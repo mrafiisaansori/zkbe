@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const {
-  sequelize, Merchant, Pengguna, Identitas, Qris, JenisBayar, RegistrationOtp,
+  sequelize, Merchant, Pengguna, Identitas, Qris, JenisBayar, RegistrationOtp, Satuan,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/password');
@@ -153,6 +153,10 @@ async function verifyOtpAndActivate({ email, otp }) {
       { NAMA: 'QRIS', MERCHANT_ID: merchant.ID },
       { NAMA: 'Transfer', MERCHANT_ID: merchant.ID },
     ], { transaction: t });
+    await Satuan.bulkCreate(
+      ['Pcs', 'Box', 'Dus', 'Kg', 'Liter', 'Botol'].map((NAMA) => ({ NAMA, MERCHANT_ID: merchant.ID })),
+      { transaction: t },
+    );
 
     await row.update({ VERIFIED: true }, { transaction: t });
     return { merchant, admin };

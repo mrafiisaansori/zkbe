@@ -279,6 +279,7 @@ const schemas = {
       harga_jual: { type: 'integer', minimum: 0, example: 18000 },
       barcode: { type: 'string', nullable: true, example: '8990001234' },
       foto: { type: 'string', nullable: true, description: 'Hanya untuk application/json. Multipart memakai file binary.' },
+      id_satuan: { type: 'integer', nullable: true, description: 'ID satuan/UOM (lihat GET /satuan). Null = belum diset.', example: 1 },
     },
   },
   ProdukUpdateRequest: {
@@ -290,6 +291,7 @@ const schemas = {
       harga_jual: { type: 'integer', minimum: 0 },
       barcode: { type: 'string', nullable: true },
       foto: { type: 'string', nullable: true, description: 'Hanya untuk application/json. Multipart memakai file binary.' },
+      id_satuan: { type: 'integer', nullable: true },
     },
   },
   ProdukCreateMultipartRequest: {
@@ -334,6 +336,11 @@ const schemas = {
     type: 'object',
     required: ['deskripsi'],
     properties: { deskripsi: { type: 'string', maxLength: 150, example: 'Minuman' } },
+  },
+  SatuanRequest: {
+    type: 'object',
+    required: ['nama'],
+    properties: { nama: { type: 'string', maxLength: 50, example: 'Box' } },
   },
   SupplierCreateRequest: {
     type: 'object',
@@ -449,6 +456,7 @@ const schemas = {
       keterangan: { type: 'string', nullable: true },
       diskon: { type: 'number', minimum: 0, default: 0 },
       kode_voucher: { type: 'string', nullable: true },
+      member_id: { type: 'integer', nullable: true, description: 'ID member (lihat GET /member). Opsional - khusus plan PRO, divalidasi di backend.', example: 5 },
     },
   },
   PaymentQrisRequest: {
@@ -641,6 +649,48 @@ const schemas = {
       valid_from: { type: 'string', format: 'date', nullable: true },
       valid_until: { type: 'string', format: 'date', nullable: true },
       is_active: { type: 'boolean' },
+    },
+  },
+
+  MemberCreateRequest: {
+    type: 'object',
+    description: 'Khusus plan PRO/BUSINESS. Dipakai juga oleh Quick Create Member di halaman kasir.',
+    required: ['nama', 'no_hp'],
+    properties: {
+      nama: { type: 'string', maxLength: 150, example: 'Budi Santoso' },
+      no_hp: { type: 'string', maxLength: 30, example: '081234567890' },
+      email: { type: 'string', format: 'email', maxLength: 150, nullable: true, example: 'budi@example.com' },
+      alamat: { type: 'string', nullable: true, example: 'Jl. Melati No. 5' },
+      status: { type: 'integer', enum: [0, 1], default: 1, description: '1=aktif, 0=nonaktif.' },
+    },
+  },
+  MemberUpdateRequest: {
+    type: 'object',
+    minProperties: 1,
+    properties: {
+      nama: { type: 'string', maxLength: 150 },
+      no_hp: { type: 'string', maxLength: 30 },
+      email: { type: 'string', format: 'email', maxLength: 150, nullable: true },
+      alamat: { type: 'string', nullable: true },
+      status: { type: 'integer', enum: [0, 1] },
+    },
+  },
+  MemberRekap: {
+    type: 'object',
+    description: 'Rekap transaksi member - hanya menghitung transaksi STATUS=1 (sah, bukan void).',
+    properties: {
+      jumlah_transaksi: { type: 'integer', example: 12 },
+      total_nilai: { type: 'number', example: 1450000 },
+      jumlah_item: { type: 'number', example: 37 },
+      transaksi_terakhir: { type: 'string', format: 'date', nullable: true, example: '2026-07-20' },
+    },
+  },
+  MemberDetailResponse: {
+    type: 'object',
+    properties: {
+      member: { type: 'object' },
+      rekap: ref('MemberRekap'),
+      riwayat: { type: 'array', items: { type: 'object' }, description: 'Maksimal 50 transaksi terbaru.' },
     },
   },
 
@@ -1295,6 +1345,42 @@ const paths = {
     }),
   },
 
+  '/satuan': {
+    get: op({
+      tags: ['Satuan'],
+      summary: 'Daftar satuan/UOM',
+      description: 'Tersedia di semua plan. Dipakai untuk memilih satuan utama produk (Pcs, Box, Dus, Kg, Liter, Botol, dll).',
+      responses: withErrors({ 200: apiResponse('Daftar satuan.', { type: 'array', items: { type: 'object' } }) }),
+    }),
+    post: op({
+      tags: ['Satuan'],
+      summary: 'Tambah satuan',
+      requestBody: jsonBody(ref('SatuanRequest')),
+      responses: withErrors({ 201: createdResponse('Satuan ditambahkan.', { type: 'object' }) }),
+    }),
+  },
+  '/satuan/{id}': {
+    get: op({
+      tags: ['Satuan'],
+      summary: 'Detail satuan',
+      parameters: [idParam('ID satuan')],
+      responses: withErrors({ 200: apiResponse('Detail satuan.', { type: 'object' }) }, { notFound: true }),
+    }),
+    put: op({
+      tags: ['Satuan'],
+      summary: 'Ubah satuan',
+      parameters: [idParam('ID satuan')],
+      requestBody: jsonBody(ref('SatuanRequest')),
+      responses: withErrors({ 200: apiResponse('Data diperbarui.', { type: 'object' }) }, { notFound: true }),
+    }),
+    delete: op({
+      tags: ['Satuan'],
+      summary: 'Hapus satuan',
+      parameters: [idParam('ID satuan')],
+      responses: withErrors({ 200: deletedResponse('Data dihapus') }, { notFound: true, validation: false }),
+    }),
+  },
+
   '/supplier': {
     get: op({
       tags: ['Supplier'],
@@ -1754,6 +1840,60 @@ const paths = {
       description: 'Tersedia di semua plan.',
       parameters: [idParam('ID voucher')],
       responses: withErrors({ 200: deletedResponse('Voucher dihapus') }, { notFound: true, validation: false }),
+    }),
+  },
+
+  '/member': {
+    get: op({
+      tags: ['Member'],
+      summary: 'Daftar member',
+      description: 'Khusus plan PRO/BUSINESS - seluruh endpoint Member ditolak (403) untuk plan FREE, termasuk lewat akses langsung tanpa UI.',
+      parameters: [
+        queryParam('search', { type: 'string' }, 'Cari nama, no. HP, atau kode member.'),
+        queryParam('status', { type: 'integer', enum: [0, 1] }, 'Status member.'),
+        ...paginationParams,
+      ],
+      responses: withErrors({ 200: apiResponse('Daftar member.', { type: 'array', items: { type: 'object' } }) }),
+    }),
+    post: op({
+      tags: ['Member'],
+      summary: 'Tambah member',
+      description: 'Khusus plan PRO/BUSINESS. Endpoint yang sama dipakai Quick Create Member di halaman kasir. kode_member digenerate otomatis.',
+      requestBody: jsonBody(ref('MemberCreateRequest')),
+      responses: withErrors({ 201: createdResponse('Member ditambahkan.', { type: 'object' }) }),
+    }),
+  },
+  '/member/{id}': {
+    get: op({
+      tags: ['Member'],
+      summary: 'Detail member',
+      description: 'Khusus plan PRO/BUSINESS.',
+      parameters: [idParam('ID member')],
+      responses: withErrors({ 200: apiResponse('Detail member.', { type: 'object' }) }, { notFound: true }),
+    }),
+    put: op({
+      tags: ['Member'],
+      summary: 'Ubah member',
+      description: 'Khusus plan PRO/BUSINESS.',
+      parameters: [idParam('ID member')],
+      requestBody: jsonBody(ref('MemberUpdateRequest')),
+      responses: withErrors({ 200: apiResponse('Member diperbarui.', { type: 'object' }) }, { notFound: true }),
+    }),
+    delete: op({
+      tags: ['Member'],
+      summary: 'Hapus member',
+      description: 'Khusus plan PRO/BUSINESS.',
+      parameters: [idParam('ID member')],
+      responses: withErrors({ 200: deletedResponse('Member dihapus') }, { notFound: true, validation: false }),
+    }),
+  },
+  '/member/{id}/detail': {
+    get: op({
+      tags: ['Member'],
+      summary: 'Detail member + rekap transaksi',
+      description: 'Khusus plan PRO/BUSINESS. Rekap: total transaksi, total nilai, jumlah item, transaksi terakhir, dan riwayat (maks. 50 transaksi terbaru).',
+      parameters: [idParam('ID member')],
+      responses: withErrors({ 200: apiResponse('Detail & rekap member.', ref('MemberDetailResponse')) }, { notFound: true }),
     }),
   },
 
@@ -2303,6 +2443,7 @@ module.exports = {
     { name: 'Merchant Monitor', description: 'Pemantauan data merchant oleh Super Admin.' },
     { name: 'Produk', description: 'Master produk, stok, dan import.' },
     { name: 'Kategori', description: 'Master kategori produk.' },
+    { name: 'Satuan', description: 'Master satuan/UOM produk (Pcs, Box, Dus, Kg, Liter, Botol, dll).' },
     { name: 'Supplier', description: 'Master supplier.' },
     { name: 'Jenis Bayar', description: 'Master metode pembayaran.' },
     { name: 'Identitas', description: 'Identitas, logo, dan banner toko.' },
@@ -2314,6 +2455,7 @@ module.exports = {
     { name: 'Kas Shift', description: 'Shift kas, mutasi, closing, dan laporan harian.' },
     { name: 'Tax', description: 'PPN dan service charge.' },
     { name: 'Voucher', description: 'Voucher dan validasi diskon.' },
+    { name: 'Member', description: 'Master member/customer & rekap transaksi (khusus plan PRO/BUSINESS).' },
     { name: 'Subscription', description: 'Billing plan dan pembayaran upgrade.' },
     { name: 'MidtransTest', description: 'Alat internal Super Admin buat ngecek status channel pembayaran Midtrans (bukan fitur bisnis, tidak nyimpan data).' },
     { name: 'Meja', description: 'Master meja dan QR token.' },

@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
 const {
   sequelize, Penjualan, DetailPenjualan, Produk, Pengguna, JenisBayar, RekamStok, Merchant,
-  MerchantInvoiceCounter, KasShift, OpenBill, OpenBillPayment,
+  MerchantInvoiceCounter, KasShift, OpenBill, OpenBillPayment, Satuan, Member,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { todayDate, nowTime, formatNoNota } = require('../utils/helpers');
@@ -9,7 +9,7 @@ const { activeMerchantId } = require('../utils/tenancy');
 const taxService = require('./taxService');
 const voucherService = require('./voucherService');
 const modifierService = require('./modifierService');
-const { currentPlan, hasProFeatures } = require('../utils/plan');
+const { currentPlan, hasProFeatures, assertProFeature } = require('../utils/plan');
 const { parsePagination, paginated } = require('../utils/pagination');
 
 // Nomor nota penjualan berurutan per merchant, mis. "TZK-000001".
@@ -42,15 +42,16 @@ async function nextNoNota(transaction) {
   return { noNotaUrut, noNota };
 }
 
-// Bentuk view_penjualan (header + nama kasir + jenis bayar).
+// Bentuk view_penjualan (header + nama kasir + jenis bayar + member bila ada).
 const includeHeader = [
   { model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] },
   { model: JenisBayar, as: 'jenisBayar', attributes: ['ID', 'NAMA'] },
+  { model: Member, as: 'member', attributes: ['ID', 'KODE_MEMBER', 'NAMA', 'NO_HP'] },
 ];
 
 const LIST_ATTRIBUTES = [
   'ID', 'NO_NOTA', 'NO_NOTA_URUT', 'TANGGAL', 'JAM', 'ID_JENIS_BAYAR', 'TOTAL', 'ID_USER', 'KETERANGAN',
-  'DISKON', 'PPN', 'SERVICE_CHARGE', 'STATUS', 'STATUS_BAYAR', 'PAYMENT_STATUS',
+  'DISKON', 'PPN', 'SERVICE_CHARGE', 'STATUS', 'STATUS_BAYAR', 'PAYMENT_STATUS', 'MEMBER_ID',
 ];
 
 async function list({ tanggal_awal, tanggal_akhir, id_user, id_jenis_bayar, status, page, limit } = {}) {
@@ -115,7 +116,7 @@ async function getById(id) {
 //   status bayar PENDING (belum lunas) sampai webhook gateway mengonfirmasi.
 //   Default (tanpa payment) = perilaku lama: STATUS_BAYAR='LUNAS'.
 async function checkout({
-  items, id_jenis_bayar, id_user, bayar, keterangan, diskon = 0, kode_voucher,
+  items, id_jenis_bayar, id_user, bayar, keterangan, diskon = 0, kode_voucher, member_id,
   _trusted = false, payment = null, _transaction = null,
 }) {
   if (!items || items.length === 0) throw new ApiError(400, 'Keranjang kosong, tidak ada item untuk dibayar');
@@ -126,6 +127,16 @@ async function checkout({
   const tax = proEnabled
     ? await taxService.get()
     : { PPN_ENABLED: false, PPN_PERSEN: 0, SERVICE_ENABLED: false, SERVICE_PERSEN: 0 };
+
+  // Member (fitur PRO) - opsional. Divalidasi di backend juga (bukan cuma UI)
+  // supaya endpoint tetap aman kalau diakses langsung dengan merchant non-PRO.
+  let memberId = null;
+  if (member_id) {
+    await assertProFeature('Fitur Member hanya tersedia untuk paket PRO.');
+    const member = await Member.findByPk(member_id);
+    if (!member) throw new ApiError(404, 'Member tidak ditemukan');
+    memberId = member.ID;
+  }
   // Voucher yang SUDAH DIBUAT tetap bisa dipakai di semua plan (cuma bikin
   // voucher baru yang dibatasi PRO - lihat voucherService.create()). Validitas
   // kode/tanggal/minimal transaksi tetap dicek normal di voucherService di bawah.
@@ -136,7 +147,10 @@ async function checkout({
     let diskonItemTotal = 0;
     const resolved = [];
     for (const it of items) {
-      const produk = await Produk.findByPk(it.id_produk, { transaction: t });
+      const produk = await Produk.findByPk(it.id_produk, {
+        include: [{ model: Satuan, as: 'satuan', attributes: ['ID', 'NAMA'] }],
+        transaction: t,
+      });
       if (!produk) throw new ApiError(404, `Produk ID ${it.id_produk} tidak ditemukan`);
       if (it.qty <= 0) throw new ApiError(400, `QTY tidak valid untuk produk ${produk.NAMA}`);
       if (produk.STOK < it.qty) throw new ApiError(400, `Stok tidak mencukupi untuk ${produk.NAMA} (tersisa ${produk.STOK})`);
@@ -153,7 +167,7 @@ async function checkout({
       const lineBruto = unit * it.qty;
       // Diskon per item DINONAKTIFKAN (selalu 0). Voucher & diskon global tetap berlaku.
       subtotal += lineBruto;
-      resolved.push({ produk, qty: it.qty, unit, modText });
+      resolved.push({ produk, qty: it.qty, unit, modText, satuanNama: produk.satuan ? produk.satuan.NAMA : null });
     }
 
     const diskonGlobal = Number(diskon) || 0;
@@ -201,6 +215,7 @@ async function checkout({
       SERVICE_CHARGE: serviceCharge,
       KODE_VOUCHER: kodeVoucher,
       DISKON_VOUCHER: diskonVoucher,
+      MEMBER_ID: memberId,
       STATUS: 1,
       STATUS_BAYAR: payment ? (payment.status_bayar || 'PENDING') : 'LUNAS',
       PAYMENT_PROVIDER: payment ? payment.provider : null,
@@ -215,6 +230,7 @@ async function checkout({
         HARGA_JUAL: r.unit, // harga efektif (produk + modifier)
         QTY: r.qty,
         MODIFIER: r.modText,
+        SATUAN: r.satuanNama,
         DISKON: 0,
       }, { transaction: t });
 

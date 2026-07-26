@@ -11,6 +11,7 @@ const Produk = sequelize.define('m_produk', {
   HARGA_JUAL: { type: DataTypes.INTEGER },
   BARCODE: { type: DataTypes.TEXT },
   FOTO: { type: DataTypes.TEXT },
+  ID_SATUAN: { type: DataTypes.INTEGER }, // FK m_satuan, null = belum diset (tidak mengubah produk lama)
   MERCHANT_ID: { type: DataTypes.INTEGER },
 }, { tableName: 'm_produk' });
 

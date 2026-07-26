@@ -76,6 +76,7 @@ module.exports = {
         harga_jual: Joi.number().integer().min(0).required(),
         barcode: Joi.string().allow('', null),
         foto: Joi.string().allow('', null),
+        id_satuan: Joi.number().integer().allow(null),
       }),
     },
     update: {
@@ -87,6 +88,7 @@ module.exports = {
         harga_jual: Joi.number().integer().min(0),
         barcode: Joi.string().allow('', null),
         foto: Joi.string().allow('', null),
+        id_satuan: Joi.number().integer().allow(null),
       }),
     },
     adjustStock: {
@@ -101,6 +103,32 @@ module.exports = {
 
   kategori: {
     upsert: { body: Joi.object({ deskripsi: Joi.string().max(150).required() }) },
+  },
+
+  satuan: {
+    upsert: { body: Joi.object({ nama: Joi.string().max(50).required() }) },
+  },
+
+  member: {
+    create: {
+      body: Joi.object({
+        nama: Joi.string().max(150).required(),
+        no_hp: Joi.string().max(30).required(),
+        email: Joi.string().email().max(150).allow('', null),
+        alamat: Joi.string().allow('', null),
+        status: Joi.number().valid(0, 1).default(1),
+      }),
+    },
+    update: {
+      params: idParam.params,
+      body: Joi.object({
+        nama: Joi.string().max(150),
+        no_hp: Joi.string().max(30),
+        email: Joi.string().email().max(150).allow('', null),
+        alamat: Joi.string().allow('', null),
+        status: Joi.number().valid(0, 1),
+      }).min(1),
+    },
   },
 
   supplier: {
@@ -214,6 +242,7 @@ module.exports = {
         keterangan: Joi.string().allow('', null),
         diskon: Joi.number().min(0).default(0),
         kode_voucher: Joi.string().allow('', null),
+        member_id: Joi.number().integer().allow(null),
       }),
     },
     kirimWA: {

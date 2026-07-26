@@ -10,6 +10,7 @@ const DetailPenjualan = sequelize.define('t_detail_penjualan', {
   HARGA_JUAL: { type: DataTypes.INTEGER },
   QTY: { type: DataTypes.DOUBLE },
   MODIFIER: { type: DataTypes.TEXT }, // deskripsi varian terpilih (mis. "Ukuran: L, Topping: Boba")
+  SATUAN: { type: DataTypes.STRING(50) }, // snapshot nama UOM produk saat transaksi (mis. "Box")
   DISKON: { type: DataTypes.DOUBLE, defaultValue: 0 }, // diskon per item (nominal)
   MERCHANT_ID: { type: DataTypes.INTEGER },
 }, { tableName: 't_detail_penjualan' });

@@ -41,12 +41,22 @@ const Kota = require('./Kota');
 const KasShift = require('./KasShift');
 const KasShiftDetail = require('./KasShiftDetail');
 const KasMutasi = require('./KasMutasi');
+const Satuan = require('./Satuan');
+const Member = require('./Member');
 const { scopeModel } = require('../utils/tenancy');
 
 // ===== Associations (mengikuti relasi di view_* dari DB existing) =====
 // Produk - Kategori
 Produk.belongsTo(Kategori, { foreignKey: 'ID_KATEGORI', targetKey: 'ID', as: 'kategori' });
 Kategori.hasMany(Produk, { foreignKey: 'ID_KATEGORI', sourceKey: 'ID', as: 'produk' });
+
+// Produk - Satuan (UOM)
+Produk.belongsTo(Satuan, { foreignKey: 'ID_SATUAN', targetKey: 'ID', as: 'satuan' });
+Satuan.hasMany(Produk, { foreignKey: 'ID_SATUAN', sourceKey: 'ID', as: 'produk' });
+
+// Penjualan - Member (fitur PRO, opsional)
+Penjualan.belongsTo(Member, { foreignKey: 'MEMBER_ID', targetKey: 'ID', as: 'member' });
+Member.hasMany(Penjualan, { foreignKey: 'MEMBER_ID', sourceKey: 'ID', as: 'penjualan' });
 
 // Penjualan - Pengguna (kasir) & JenisBayar
 Penjualan.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'kasir' });
@@ -130,6 +140,7 @@ KasShift.hasMany(Penjualan, { foreignKey: 'ID_SHIFT', sourceKey: 'ID', as: 'penj
   PaymentGatewaySetting, PaymentLog,
   MerchantInvoiceCounter,
   KasShift, KasShiftDetail, KasMutasi,
+  Satuan, Member,
 ].forEach((m) => scopeModel(m));
 // Catatan: Merchant, RegistrationOtp, SubscriptionSetting TIDAK di-scope
 // (dikelola super admin / global / alur publik).
@@ -147,4 +158,5 @@ module.exports = {
   PaymentGatewaySetting, PaymentLog, PaymentWebhookLog,
   Merchant, MerchantInvoiceCounter, RegistrationOtp, PasswordResetOtp, EmailChangeOtp, PlanHistory, Provinsi, Kota,
   KasShift, KasShiftDetail, KasMutasi,
+  Satuan, Member,
 };
