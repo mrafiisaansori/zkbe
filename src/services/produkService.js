@@ -52,7 +52,7 @@ async function getByBarcode(barcode) {
 }
 
 async function create(data) {
-  // Validasi limit plan FREE: maksimal 50 produk. Produk.count() ter-scope merchant.
+  // Validasi limit plan FREE: maksimal FREE_MAX_PRODUK produk. Produk.count() ter-scope merchant.
   const plan = await currentPlan();
   if (plan === 'FREE') {
     const jumlah = await Produk.count();

@@ -3,7 +3,9 @@ const {
   Penjualan, DetailPenjualan, Produk, Pengguna, JenisBayar, Penyusutan,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
-const { currentPlan, hasProFeatures } = require('../utils/plan');
+const {
+  currentPlan, hasProFeatures, assertReportDateAllowed,
+} = require('../utils/plan');
 const { LOW_STOCK_THRESHOLD, LOW_STOCK_LIMIT, LOW_STOCK_ORDER } = require('../utils/inventory');
 const { parsePagination, paginated } = require('../utils/pagination');
 
@@ -17,6 +19,7 @@ const PENJUALAN_LIST_ATTRIBUTES = [
  * Filter: rentang tanggal, kasir (id_user / 'all'), status.
  */
 async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', id_jenis_bayar, id_shift, status = 1, page, limit }) {
+  await assertReportDateAllowed(tanggal_awal);
   const where = { TANGGAL: { [Op.between]: [tanggal_awal, tanggal_akhir] }, STATUS: status };
   if (id_user && id_user !== 'all') where.ID_USER = id_user;
   if (id_jenis_bayar) where.ID_JENIS_BAYAR = id_jenis_bayar;
@@ -83,6 +86,7 @@ async function penjualan({ tanggal_awal, tanggal_akhir, id_user = 'all', id_jeni
  * Omzet = SUM(HARGA_JUAL * QTY).
  */
 async function pendapatan({ tanggal_awal, tanggal_akhir, status = 1 }) {
+  await assertReportDateAllowed(tanggal_awal);
   const range = { TANGGAL: { [Op.between]: [tanggal_awal, tanggal_akhir] }, STATUS: status };
 
   // Header: hitung PPN, service, dan omzet bersih (DPP = TOTAL - PPN - service).

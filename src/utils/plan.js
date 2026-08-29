@@ -2,8 +2,9 @@ const { Merchant } = require('../models');
 const { activeMerchantId, getTenant } = require('./tenancy');
 
 // Batas plan FREE.
-const FREE_MAX_PRODUK = 20;
+const FREE_MAX_PRODUK = 5;
 const FREE_MAX_KASIR = 1; // jumlah user LEVEL kasir (2)
+const FREE_REPORT_MAX_DAYS = 30; // laporan FREE hanya 30 hari terakhir (spt Qasir Free)
 
 // Daftar plan berbayar yang mendapatkan SELURUH fitur PRO.
 // BUSINESS = superset dari PRO (semua fitur PRO + payment gateway Midtrans).
@@ -79,9 +80,33 @@ async function assertProFeature(message = PRO_UPGRADE_MESSAGE) {
   return plan;
 }
 
+// Tanggal terlama yang boleh dilihat plan FREE pada laporan (hari ini - 30 hari, jam 00:00).
+function reportCutoffDate() {
+  const d = new Date();
+  d.setDate(d.getDate() - FREE_REPORT_MAX_DAYS);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Batasi tanggal_awal laporan (penjualan/pendapatan/closing kasir) untuk plan FREE:
+ * hanya boleh melihat FREE_REPORT_MAX_DAYS hari terakhir. PRO/BUSINESS tanpa batas.
+ * Dipanggil di service laporan yang mewajibkan tanggal_awal.
+ */
+async function assertReportDateAllowed(tanggalAwal) {
+  const plan = await currentPlan();
+  if (hasProFeatures(plan) || !tanggalAwal) return plan;
+  if (new Date(tanggalAwal) < reportCutoffDate()) {
+    const ApiError = require('./ApiError');
+    throw new ApiError(403, `Plan FREE hanya bisa melihat laporan ${FREE_REPORT_MAX_DAYS} hari terakhir. Upgrade ke PRO untuk melihat laporan lengkap.`);
+  }
+  return plan;
+}
+
 module.exports = {
   FREE_MAX_PRODUK,
   FREE_MAX_KASIR,
+  FREE_REPORT_MAX_DAYS,
   PAID_PLANS,
   effectivePlan,
   hasProFeatures,
@@ -90,5 +115,7 @@ module.exports = {
   currentMerchant,
   currentPlan,
   assertProFeature,
+  reportCutoffDate,
+  assertReportDateAllowed,
   PRO_UPGRADE_MESSAGE,
 };

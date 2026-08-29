@@ -4,6 +4,9 @@ const {
   Penjualan, JenisBayar, Pengguna,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
+const {
+  currentPlan, hasProFeatures, reportCutoffDate, assertReportDateAllowed,
+} = require('../utils/plan');
 
 // ---------------------------------------------------------------------
 // Util: deteksi metode bayar tunai dari namanya (Cash / Tunai).
@@ -209,6 +212,8 @@ async function getById(idShift, trx) {
   return plain;
 }
 
+// Riwayat closing kasir. Plan FREE dibatasi 30 hari terakhir (tanggal_awal
+// yang lebih lama otomatis dipangkas ke batas, bukan error — filter di sini opsional).
 async function list({ status, id_user, tanggal_awal, tanggal_akhir } = {}) {
   const where = {};
   if (status === 'OPEN') where.STATUS = 1;
@@ -218,6 +223,13 @@ async function list({ status, id_user, tanggal_awal, tanggal_akhir } = {}) {
     where.BUKA_AT = {};
     if (tanggal_awal) where.BUKA_AT[Op.gte] = dayBounds(tanggal_awal).start;
     if (tanggal_akhir) where.BUKA_AT[Op.lte] = dayBounds(tanggal_akhir).end;
+  }
+  const plan = await currentPlan();
+  if (!hasProFeatures(plan)) {
+    const cutoff = dayBounds(reportCutoffDate()).start;
+    if (!where.BUKA_AT?.[Op.gte] || where.BUKA_AT[Op.gte] < cutoff) {
+      where.BUKA_AT = { ...where.BUKA_AT, [Op.gte]: cutoff };
+    }
   }
   return KasShift.findAll({
     where,
@@ -232,6 +244,7 @@ async function list({ status, id_user, tanggal_awal, tanggal_akhir } = {}) {
 // ---------------------------------------------------------------------
 async function reportDaily(tanggal) {
   if (!tanggal) throw new ApiError(400, 'Parameter tanggal wajib diisi (YYYY-MM-DD)');
+  await assertReportDateAllowed(tanggal);
   const b = dayBounds(tanggal);
   const shifts = await KasShift.findAll({
     where: {
