@@ -6,15 +6,7 @@ const { todayDate } = require('../utils/helpers');
 const { activeMerchantId } = require('../utils/tenancy');
 const { LOW_STOCK_THRESHOLD, LOW_STOCK_LIMIT, LOW_STOCK_ORDER } = require('../utils/inventory');
 const { remember } = require('../utils/cache');
-
-// PENTING: Sequelize sum()/aggregate TIDAK memicu hook scoping tenant
-// (beda dengan find & count). Jadi merchant_id WAJIB disisipkan manual ke
-// where agar "penjualan hari ini" tidak bocor menghitung semua merchant.
-// Super admin: activeMerchantId() = undefined -> tidak di-filter (global).
-function withMerchant(where = {}) {
-  const mid = activeMerchantId();
-  return mid === undefined ? where : { ...where, MERCHANT_ID: mid };
-}
+const reportService = require('./reportService');
 
 function cacheKey(extra = '') {
   const mid = activeMerchantId();
@@ -23,26 +15,25 @@ function cacheKey(extra = '') {
 
 /**
  * Ringkasan dashboard: penjualan hari ini, jumlah transaksi, produk, user,
- * dan produk stok menipis.
+ * dan produk stok menipis. Angka keuangan & produk/varian terlaris dari
+ * reportService (satu tempat sama dengan /laporan/rekap & /laporan/pendapatan)
+ * supaya selalu konsisten.
  */
 async function summaryFresh() {
   const today = todayDate();
-  const todayWhere = { TANGGAL: today, STATUS: 1 };
+  const d = new Date(today);
+  const firstOfMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 
   const [
-    transaksiHariIni,
-    brutoHariIni,
-    ppnHariIni,
-    serviceHariIni,
+    todayReport,
+    monthReport,
     totalProduk,
     totalUser,
     stokMenipis,
+    transaksiTerbaru,
   ] = await Promise.all([
-    Penjualan.count({ where: { ...todayWhere } }),
-    // sum() tidak ter-scope otomatis -> sisipkan merchant_id manual.
-    Penjualan.sum('TOTAL', { where: withMerchant({ ...todayWhere }) }),
-    Penjualan.sum('PPN', { where: withMerchant({ ...todayWhere }) }),
-    Penjualan.sum('SERVICE_CHARGE', { where: withMerchant({ ...todayWhere }) }),
+    reportService.rekap({ dari: today, sampai: today }),
+    reportService.rekap({ dari: firstOfMonth, sampai: today, limit: 5 }),
     Produk.count(),
     Pengguna.count(),
     Produk.findAll({
@@ -51,75 +42,33 @@ async function summaryFresh() {
       order: LOW_STOCK_ORDER,
       limit: LOW_STOCK_LIMIT,
     }),
+    // Transaksi terbaru (5) — Penjualan ter-scope (find).
+    Penjualan.findAll({
+      where: { STATUS: 1 },
+      attributes: ['ID', 'NO_NOTA', 'NO_NOTA_URUT', 'TANGGAL', 'JAM', 'TOTAL'],
+      include: [{ model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] }],
+      order: [['ID', 'DESC']],
+      limit: 5,
+    }),
   ]);
 
-  const bruto = Number(brutoHariIni) || 0;
-  const ppn = Number(ppnHariIni) || 0;
-  const service = Number(serviceHariIni) || 0;
-  const omzet = bruto - ppn - service; // omzet bersih (tanpa PPN & service)
-
-  // Modal & qty terjual hari ini (untuk laba kotor) — DetailPenjualan ter-scope (find).
-  const [todayAgg = {}] = await DetailPenjualan.findAll({
-    attributes: [
-      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_BELI`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'modal'],
-      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'qty'],
-    ],
-    include: [{ model: Penjualan, as: 'penjualan', attributes: [], required: true, where: { TANGGAL: today, STATUS: 1 } }],
-    raw: true,
-  });
-  const modalToday = Number(todayAgg.modal) || 0;
-  const qtyToday = Number(todayAgg.qty) || 0;
-
-  // Produk terlaris bulan ini (top 5 by qty) — agregasi di JS agar robust.
-  const d = new Date(today);
-  const firstOfMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-  const produkTerlarisRows = await DetailPenjualan.findAll({
-    attributes: [
-      'ID_PRODUK',
-      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'qty'],
-      [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_JUAL`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'omzet'],
-    ],
-    include: [
-      { model: Penjualan, as: 'penjualan', attributes: [], required: true, where: { TANGGAL: { [Op.between]: [firstOfMonth, today] }, STATUS: 1 } },
-      { model: Produk, as: 'produk', attributes: ['NAMA'] },
-    ],
-    group: ['t_detail_penjualan.ID_PRODUK', 'produk.ID', 'produk.NAMA'],
-    order: [[literal('qty'), 'DESC']],
-    limit: 5,
-    raw: true,
-    nest: true,
-  });
-  const produkTerlaris = produkTerlarisRows.map((row) => ({
-    id_produk: row.ID_PRODUK,
-    nama: row.produk?.NAMA || `#${row.ID_PRODUK}`,
-    qty: Number(row.qty) || 0,
-    omzet: Number(row.omzet) || 0,
-  }));
-
-  // Transaksi terbaru (5) — Penjualan ter-scope (find).
-  const transaksiTerbaru = await Penjualan.findAll({
-    where: { STATUS: 1 },
-    attributes: ['ID', 'NO_NOTA', 'NO_NOTA_URUT', 'TANGGAL', 'JAM', 'TOTAL'],
-    include: [{ model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] }],
-    order: [['ID', 'DESC']],
-    limit: 5,
-  });
-
+  const { ringkasan } = todayReport;
   return {
     tanggal: today,
-    transaksi_hari_ini: transaksiHariIni,
+    transaksi_hari_ini: ringkasan.jumlah_transaksi,
     // Penjualan hari ini = OMZET BERSIH (tanpa PPN & service charge).
-    pendapatan_hari_ini: omzet,
-    laba_hari_ini: omzet - modalToday, // laba kotor hari ini
-    qty_terjual_hari_ini: qtyToday,
-    rata_rata_transaksi: transaksiHariIni > 0 ? Math.round(omzet / transaksiHariIni) : 0,
-    ppn_hari_ini: ppn,
-    service_hari_ini: service,
-    total_dibayar_hari_ini: bruto,
+    pendapatan_hari_ini: ringkasan.omzet,
+    laba_hari_ini: ringkasan.laba, // laba kotor hari ini
+    qty_terjual_hari_ini: ringkasan.qty,
+    rata_rata_transaksi: ringkasan.rata_rata_transaksi,
+    ppn_hari_ini: ringkasan.ppn,
+    service_hari_ini: ringkasan.service,
+    total_dibayar_hari_ini: ringkasan.total_dibayar,
     total_produk: totalProduk,
     total_pengguna: totalUser,
     stok_menipis: stokMenipis,
-    produk_terlaris: produkTerlaris,
+    produk_terlaris: monthReport.produk_terlaris,
+    varian_terlaris: monthReport.varian_terlaris,
     transaksi_terbaru: transaksiTerbaru,
   };
 }
