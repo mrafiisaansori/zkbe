@@ -482,6 +482,7 @@ module.exports = {
       body: Joi.object({
         nama: Joi.string().max(100).required(),
         harga: Joi.number().integer().min(0).default(0),
+        harga_beli: Joi.number().integer().min(0).default(0),
       }),
     },
     setProduct: {

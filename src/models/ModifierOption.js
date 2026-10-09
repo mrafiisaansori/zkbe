@@ -7,6 +7,7 @@ const ModifierOption = sequelize.define('m_modifier_option', {
   ID_GROUP: { type: DataTypes.INTEGER },
   NAMA: { type: DataTypes.STRING(100) },
   HARGA: { type: DataTypes.INTEGER, defaultValue: 0 },
+  HARGA_BELI: { type: DataTypes.INTEGER, defaultValue: 0 }, // modal opsi (mis. ekstra topping)
   MERCHANT_ID: { type: DataTypes.INTEGER },
 }, {
   tableName: 'm_modifier_option',

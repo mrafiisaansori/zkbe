@@ -11,6 +11,7 @@ const voucherService = require('./voucherService');
 const modifierService = require('./modifierService');
 const { currentPlan, hasProFeatures, assertProFeature } = require('../utils/plan');
 const { parsePagination, paginated } = require('../utils/pagination');
+const { normalizeDetailFields } = require('../utils/modifierDetail');
 
 // Nomor nota penjualan berurutan per merchant, mis. "TZK-000001".
 async function nextNoNota(transaction) {
@@ -96,6 +97,7 @@ async function getById(id) {
   });
   if (!p) throw new ApiError(404, 'Transaksi penjualan tidak ditemukan');
   const plain = p.toJSON();
+  if (Array.isArray(plain.detail)) plain.detail = plain.detail.map(normalizeDetailFields);
   plain.open_bill = await findOpenBillOrigin(id);
   return plain;
 }
@@ -154,20 +156,38 @@ async function checkout({
       if (!produk) throw new ApiError(404, `Produk ID ${it.id_produk} tidak ditemukan`);
       if (it.qty <= 0) throw new ApiError(400, `QTY tidak valid untuk produk ${produk.NAMA}`);
       if (produk.STOK < it.qty) throw new ApiError(400, `Stok tidak mencukupi untuk ${produk.NAMA} (tersisa ${produk.STOK})`);
-      // Harga unit = harga produk + tambahan modifier/varian.
-      let unit; let modText;
+      // Harga unit = harga dasar produk + tambahan modifier/varian.
+      // _trusted (open bill): nilai sudah di-snapshot saat bill dibuat, pakai apa adanya.
+      let unit; let modText; let hargaDasar; let hargaVarian; let modifierDetail;
+      let hargaBeliDasar; let hargaBeliLine;
       if (_trusted) {
-        unit = Number(it.unit) || produk.HARGA_JUAL;
+        hargaDasar = it.harga_dasar != null ? Number(it.harga_dasar) : produk.HARGA_JUAL;
+        hargaVarian = Number(it.harga_varian) || 0;
+        unit = Number(it.unit) || (hargaDasar + hargaVarian);
         modText = it.modifier_text || null;
+        modifierDetail = it.modifier_detail || null;
+        // Harga beli produk saja (TANPA varian) - harga beli master TIDAK pernah diubah/dipakai ulang di sini
+        // selain sebagai fallback bila snapshot tidak tersedia (data lama).
+        hargaBeliDasar = it.harga_beli_dasar != null ? Number(it.harga_beli_dasar) : produk.HARGA_BELI;
+        const modalVarian = (modifierDetail || []).reduce((s, o) => s + (Number(o.harga_beli) || 0), 0);
+        hargaBeliLine = hargaBeliDasar + modalVarian;
       } else {
         const mod = await modifierService.resolveModifiers(it.modifier_option_ids);
-        unit = produk.HARGA_JUAL + mod.extra;
+        hargaDasar = produk.HARGA_JUAL;
+        hargaVarian = mod.extra;
+        unit = hargaDasar + hargaVarian;
         modText = mod.text;
+        modifierDetail = mod.detail;
+        hargaBeliDasar = Number(produk.HARGA_BELI) || 0;
+        hargaBeliLine = hargaBeliDasar + (Number(mod.extraBeli) || 0);
       }
       const lineBruto = unit * it.qty;
       // Diskon per item DINONAKTIFKAN (selalu 0). Voucher & diskon global tetap berlaku.
       subtotal += lineBruto;
-      resolved.push({ produk, qty: it.qty, unit, modText, satuanNama: produk.satuan ? produk.satuan.NAMA : null });
+      resolved.push({
+        produk, qty: it.qty, unit, modText, hargaDasar, hargaVarian, modifierDetail, hargaBeliDasar, hargaBeliLine,
+        satuanNama: produk.satuan ? produk.satuan.NAMA : null,
+      });
     }
 
     const diskonGlobal = Number(diskon) || 0;
@@ -226,10 +246,14 @@ async function checkout({
       await DetailPenjualan.create({
         ID_TRANSAKSI_PENJUALAN: header.ID,
         ID_PRODUK: r.produk.ID,
-        HARGA_BELI: r.produk.HARGA_BELI,
+        HARGA_BELI: r.hargaBeliLine, // modal produk + modal opsi varian (laporan laba)
+        HARGA_BELI_DASAR: r.hargaBeliDasar, // harga beli produk saja, TANPA varian
         HARGA_JUAL: r.unit, // harga efektif (produk + modifier)
+        HARGA_DASAR: r.hargaDasar,
+        HARGA_VARIAN: r.hargaVarian,
         QTY: r.qty,
         MODIFIER: r.modText,
+        MODIFIER_DETAIL: r.modifierDetail ? JSON.stringify(r.modifierDetail) : null,
         SATUAN: r.satuanNama,
         DISKON: 0,
       }, { transaction: t });

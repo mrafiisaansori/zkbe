@@ -309,6 +309,33 @@ async function rekapLegacy({
   };
 }
 
+// Varian/opsi modifier paling laris dalam rentang - dibaca dari snapshot
+// MODIFIER_DETAIL (JSON per baris), bukan dihitung ulang dari master modifier.
+async function varianTerlaris(range, topLimit) {
+  const rows = await DetailPenjualan.findAll({
+    attributes: ['QTY', 'MODIFIER_DETAIL'],
+    where: { MODIFIER_DETAIL: { [Op.ne]: null } },
+    include: [{ model: Penjualan, as: 'penjualan', attributes: [], where: range, required: true }],
+    raw: true,
+  });
+
+  const perVarian = new Map();
+  for (const row of rows) {
+    let opts;
+    try { opts = JSON.parse(row.MODIFIER_DETAIL); } catch (_) { opts = null; }
+    if (!Array.isArray(opts)) continue;
+    const qty = Number(row.QTY) || 0;
+    for (const o of opts) {
+      const key = `${o.grup || ''}||${o.nama}`;
+      const v = perVarian.get(key) || { nama: o.nama, grup: o.grup || null, qty: 0, omzet: 0 };
+      v.qty += qty;
+      v.omzet += (Number(o.harga) || 0) * qty;
+      perVarian.set(key, v);
+    }
+  }
+  return [...perVarian.values()].sort((a, b) => b.qty - a.qty).slice(0, topLimit);
+}
+
 async function rekap({
   tanggal_awal, tanggal_akhir, status = 1, top_limit = 10,
 }) {
@@ -393,6 +420,7 @@ async function rekap({
         'ID_PRODUK',
         [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'qty'],
         [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_JUAL`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'omzet'],
+        [literal('COALESCE(SUM(COALESCE(`t_detail_penjualan`.`HARGA_VARIAN`, 0) * COALESCE(`t_detail_penjualan`.`QTY`, 0)), 0)'), 'omzet_varian'],
       ],
       include: [
         { model: Penjualan, as: 'penjualan', attributes: [], where: range, required: true },
@@ -451,7 +479,9 @@ async function rekap({
       nama: row.produk?.NAMA || `Produk #${row.ID_PRODUK}`,
       qty: Number(row.qty) || 0,
       omzet: Number(row.omzet) || 0,
+      omzet_varian: Number(row.omzet_varian) || 0,
     })),
+    varian_terlaris: await varianTerlaris(range, topLimit),
     produk_stok_menipis: stokMenipis.map((p) => ({
       id: p.ID, nama: p.NAMA, stok: p.STOK, harga_jual: p.HARGA_JUAL,
     })),

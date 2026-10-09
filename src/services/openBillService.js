@@ -10,6 +10,7 @@ const penjualanService = require('./penjualanService');
 const midtrans = require('./midtransService');
 const modifierService = require('./modifierService');
 const { parsePagination, paginated } = require('../utils/pagination');
+const { normalizeDetailFields, parseModifierDetail } = require('../utils/modifierDetail');
 
 // ponytail: window checkout split bill tetap 30 menit, samakan dengan paymentService.
 const SNAP_TTL_MINUTES = 30;
@@ -89,14 +90,38 @@ async function resolveItems(items, t) {
     if (!produk) throw new ApiError(404, `Produk ID ${it.id_produk} tidak ditemukan`);
     const qty = Number(it.qty);
     if (!(qty > 0)) throw new ApiError(400, `QTY tidak valid untuk produk ${produk.NAMA}`);
-    // Modifier/varian -> tambahan harga + deskripsi.
+    // Modifier/varian -> tambahan harga, modal & deskripsi.
     const mod = await modifierService.resolveModifiers(it.modifier_option_ids);
-    const unit = produk.HARGA_JUAL + mod.extra;
+    const hargaDasar = produk.HARGA_JUAL;
+    const hargaVarian = mod.extra;
+    const unit = hargaDasar + hargaVarian;
+    const hargaBeliDasar = Number(produk.HARGA_BELI) || 0; // harga beli produk saja, TANPA varian
+    const hargaBeliLine = hargaBeliDasar + (Number(mod.extraBeli) || 0);
     total += unit * qty;
     const modIds = (it.modifier_option_ids || []).join(',') || null;
-    resolved.push({ produk, qty, unit, modText: mod.text, modIds, note: it.note || null });
+    resolved.push({
+      produk, qty, unit, hargaDasar, hargaVarian, hargaBeliDasar, hargaBeliLine,
+      modText: mod.text, modifierDetail: mod.detail, modIds, note: it.note || null,
+    });
   }
   return { total, resolved };
+}
+
+// Payload item untuk penjualanService.checkout() saat bayar open bill - nilai
+// diambil dari snapshot ID_OPEN_BILL_DETAIL, TIDAK dihitung ulang dari master.
+function toCheckoutItem(detail, qty) {
+  return {
+    id_produk: detail.ID_PRODUK,
+    qty,
+    unit: detail.HARGA_JUAL,
+    harga_dasar: detail.HARGA_DASAR != null ? detail.HARGA_DASAR : detail.HARGA_JUAL,
+    harga_varian: detail.HARGA_VARIAN || 0,
+    // Harga beli produk saja (TANPA varian) - checkout menghitung ulang modal baris
+    // dari ini + modal opsi di modifier_detail, bukan dari master produk saat ini.
+    harga_beli_dasar: detail.HARGA_BELI_DASAR != null ? detail.HARGA_BELI_DASAR : detail.HARGA_BELI,
+    modifier_text: detail.MODIFIER,
+    modifier_detail: parseModifierDetail(detail.MODIFIER_DETAIL),
+  };
 }
 
 function paidQty(detail) {
@@ -184,7 +209,9 @@ async function getById(id) {
   // findByPk ter-scope merchant otomatis (hook) -> bill merchant lain => 404.
   const bill = await OpenBill.findByPk(id, { include: includeFull });
   if (!bill) throw new ApiError(404, 'Open bill tidak ditemukan');
-  return bill;
+  const plain = bill.toJSON();
+  if (Array.isArray(plain.detail)) plain.detail = plain.detail.map(normalizeDetailFields);
+  return plain;
 }
 
 async function list({ status, search, page, limit } = {}) {
@@ -241,10 +268,14 @@ async function create({ customer_name, member_id, table_no, note, items, id_user
       await OpenBillDetail.create({
         ID_OPEN_BILL: bill.ID,
         ID_PRODUK: r.produk.ID,
-        HARGA_BELI: r.produk.HARGA_BELI,
+        HARGA_BELI: r.hargaBeliLine,
+        HARGA_BELI_DASAR: r.hargaBeliDasar,
         HARGA_JUAL: r.unit,
+        HARGA_DASAR: r.hargaDasar,
+        HARGA_VARIAN: r.hargaVarian,
         QTY: r.qty,
         MODIFIER: r.modText,
+        MODIFIER_DETAIL: r.modifierDetail ? JSON.stringify(r.modifierDetail) : null,
         MODIFIER_OPTIONS: r.modIds,
         NOTE: r.note,
       }, { transaction: t });
@@ -281,10 +312,14 @@ async function update(id, { customer_name, member_id, table_no, note, items }) {
         await OpenBillDetail.create({
           ID_OPEN_BILL: id,
           ID_PRODUK: r.produk.ID,
-          HARGA_BELI: r.produk.HARGA_BELI,
+          HARGA_BELI: r.hargaBeliLine,
+          HARGA_BELI_DASAR: r.hargaBeliDasar,
           HARGA_JUAL: r.unit,
+          HARGA_DASAR: r.hargaDasar,
+          HARGA_VARIAN: r.hargaVarian,
           QTY: r.qty,
           MODIFIER: r.modText,
+          MODIFIER_DETAIL: r.modifierDetail ? JSON.stringify(r.modifierDetail) : null,
           MODIFIER_OPTIONS: r.modIds,
           NOTE: r.note,
         }, { transaction: t });
@@ -318,12 +353,7 @@ async function pay(id, { id_jenis_bayar, bayar, keterangan, diskon = 0, id_user 
     // mengurangi stok, semuanya atomik. merchant_id mengikuti sesi (hook).
     const result = await penjualanService.checkout({
       // Harga & modifier sudah dihitung server saat bill dibuat -> _trusted.
-      items: remainingDetails.map(({ detail, qty }) => ({
-        id_produk: detail.ID_PRODUK,
-        qty,
-        unit: detail.HARGA_JUAL,
-        modifier_text: detail.MODIFIER,
-      })),
+      items: remainingDetails.map(({ detail, qty }) => toCheckoutItem(detail, qty)),
       id_jenis_bayar,
       id_user: id_user || bill.ID_USER,
       bayar,
@@ -376,12 +406,7 @@ async function payPartial(id, {
     const { selected } = await resolveSelectedDetails(id, items, t);
 
     const result = await penjualanService.checkout({
-      items: selected.map(({ detail, qty }) => ({
-        id_produk: detail.ID_PRODUK,
-        qty,
-        unit: detail.HARGA_JUAL,
-        modifier_text: detail.MODIFIER,
-      })),
+      items: selected.map(({ detail, qty }) => toCheckoutItem(detail, qty)),
       id_jenis_bayar,
       id_user: id_user || bill.ID_USER,
       bayar,
@@ -436,12 +461,7 @@ async function createPartialQris(id, {
 
     const { selected } = await resolveSelectedDetails(id, items, t);
     const result = await penjualanService.checkout({
-      items: selected.map(({ detail, qty }) => ({
-        id_produk: detail.ID_PRODUK,
-        qty,
-        unit: detail.HARGA_JUAL,
-        modifier_text: detail.MODIFIER,
-      })),
+      items: selected.map(({ detail, qty }) => toCheckoutItem(detail, qty)),
       id_jenis_bayar,
       id_user: id_user || bill.ID_USER,
       diskon,

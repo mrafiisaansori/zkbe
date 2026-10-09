@@ -35,13 +35,15 @@ async function removeGroup(id) {
 async function addOption(groupId, data) {
   const g = await ModifierGroup.findByPk(groupId);
   if (!g) throw new ApiError(404, 'Grup modifier tidak ditemukan');
-  return ModifierOption.create({ ID_GROUP: groupId, NAMA: data.nama, HARGA: Number(data.harga) || 0 });
+  return ModifierOption.create({
+    ID_GROUP: groupId, NAMA: data.nama, HARGA: Number(data.harga) || 0, HARGA_BELI: Number(data.harga_beli) || 0,
+  });
 }
 
 async function updateOption(id, data) {
   const o = await ModifierOption.findByPk(id);
   if (!o) throw new ApiError(404, 'Opsi tidak ditemukan');
-  const map = { NAMA: data.nama, HARGA: data.harga };
+  const map = { NAMA: data.nama, HARGA: data.harga, HARGA_BELI: data.harga_beli };
   Object.keys(map).forEach((k) => { if (map[k] === undefined) delete map[k]; });
   await o.update(map);
   return o;
@@ -77,24 +79,35 @@ async function setProductGroups(produkId, groupIds) {
 }
 
 /**
- * Hitung tambahan harga + deskripsi dari daftar option id (ter-scope merchant).
- * Dipakai saat checkout & open bill. Mengembalikan { extra, text }.
+ * Hitung tambahan harga/modal + deskripsi dari daftar option id (ter-scope merchant).
+ * Dipakai saat checkout & open bill. Mengembalikan { extra, extraBeli, text, detail }.
+ * - extra: total tambahan HARGA_JUAL per unit (HARGA_VARIAN baris).
+ * - extraBeli: total tambahan modal per unit (bagian dari HARGA_BELI baris).
+ * - detail: snapshot opsi untuk MODIFIER_DETAIL, null bila tidak ada opsi.
  */
 async function resolveModifiers(optionIds) {
   const ids = (optionIds || []).map(Number).filter(Boolean);
-  if (!ids.length) return { extra: 0, text: null };
+  if (!ids.length) return { extra: 0, extraBeli: 0, text: null, detail: null };
   const opts = await ModifierOption.findAll({
     where: { ID: ids },
     include: [{ model: ModifierGroup, as: 'group', attributes: ['NAMA'] }],
   });
   const extra = opts.reduce((s, o) => s + (Number(o.HARGA) || 0), 0);
+  const extraBeli = opts.reduce((s, o) => s + (Number(o.HARGA_BELI) || 0), 0);
   const byGroup = {};
   opts.forEach((o) => {
     const g = (o.group && o.group.NAMA) || 'Opsi';
     (byGroup[g] = byGroup[g] || []).push(o.NAMA);
   });
   const text = Object.entries(byGroup).map(([g, vals]) => `${g}: ${vals.join('/')}`).join(', ');
-  return { extra, text: text || null };
+  const detail = opts.map((o) => ({
+    id: o.ID,
+    nama: o.NAMA,
+    grup: (o.group && o.group.NAMA) || null,
+    harga: Number(o.HARGA) || 0,
+    harga_beli: Number(o.HARGA_BELI) || 0,
+  }));
+  return { extra, extraBeli, text: text || null, detail };
 }
 
 module.exports = {
