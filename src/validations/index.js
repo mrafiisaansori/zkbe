@@ -350,6 +350,39 @@ module.exports = {
         tahun: Joi.number().integer().min(2000).max(2100),
       }),
     },
+    voucherCreate: {
+      body: Joi.object({
+        kode: Joi.string().max(50).required(),
+        target_plan: Joi.string().valid('PRO', 'BUSINESS').default('PRO'),
+        paket: Joi.string().valid('BULANAN', '3_BULAN', '6_BULAN', 'TAHUNAN').required(),
+        max_redemptions: Joi.number().integer().min(1).allow(null),
+        valid_from: Joi.date().iso().allow(null),
+        valid_until: Joi.date().iso().allow(null),
+        is_active: Joi.boolean(),
+        note: Joi.string().max(255).allow('', null),
+      }),
+    },
+    voucherUpdate: {
+      params: idParam.params,
+      body: Joi.object({
+        kode: Joi.string().max(50),
+        target_plan: Joi.string().valid('PRO', 'BUSINESS'),
+        paket: Joi.string().valid('BULANAN', '3_BULAN', '6_BULAN', 'TAHUNAN'),
+        max_redemptions: Joi.number().integer().min(1).allow(null),
+        valid_from: Joi.date().iso().allow(null),
+        valid_until: Joi.date().iso().allow(null),
+        is_active: Joi.boolean(),
+        note: Joi.string().max(255).allow('', null),
+      }).min(1),
+    },
+    voucherId: {
+      params: idParam.params,
+    },
+    redeem: {
+      body: Joi.object({
+        kode: Joi.string().max(50).required(),
+      }),
+    },
   },
 
   openBill: {

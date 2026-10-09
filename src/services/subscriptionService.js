@@ -1,6 +1,7 @@
 const { Op, literal } = require('sequelize');
 const {
   sequelize, SubscriptionSetting, SubscriptionPayment, Merchant, Pengguna, PlanHistory,
+  SubscriptionVoucher, SubscriptionVoucherRedemption,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { activeMerchantId, getTenant, withMerchantScope } = require('../utils/tenancy');
@@ -306,6 +307,144 @@ async function getPaymentAdmin(id) {
   return row;
 }
 
+// ===== Voucher Redeem (Super Admin kelola kode, Merchant redeem) =====
+// Redeem LANGSUNG memperpanjang PRO_EXPIRES_AT sejumlah durasi PAKET voucher,
+// tanpa lewat pembayaran Midtrans. Beda dengan voucherService (diskon POS).
+
+async function listVouchers() {
+  return SubscriptionVoucher.findAll({ order: [['ID', 'DESC']] });
+}
+
+async function createVoucher(data, userId) {
+  const kode = String(data.kode || '').trim().toUpperCase();
+  const exists = await SubscriptionVoucher.findOne({ where: { KODE: kode } });
+  if (exists) throw new ApiError(409, 'Kode voucher sudah dipakai.');
+  return SubscriptionVoucher.create({
+    KODE: kode,
+    TARGET_PLAN: data.target_plan || 'PRO',
+    PAKET: data.paket,
+    MAX_REDEMPTIONS: data.max_redemptions ?? null,
+    VALID_FROM: data.valid_from || null,
+    VALID_UNTIL: data.valid_until || null,
+    IS_ACTIVE: data.is_active !== undefined ? data.is_active : true,
+    NOTE: data.note || null,
+    CREATED_BY: userId ?? null,
+  });
+}
+
+async function updateVoucher(id, data) {
+  const v = await SubscriptionVoucher.findByPk(id);
+  if (!v) throw new ApiError(404, 'Voucher tidak ditemukan.');
+  const map = {
+    TARGET_PLAN: data.target_plan,
+    PAKET: data.paket,
+    MAX_REDEMPTIONS: data.max_redemptions,
+    VALID_FROM: data.valid_from,
+    VALID_UNTIL: data.valid_until,
+    IS_ACTIVE: data.is_active,
+    NOTE: data.note,
+  };
+  if (data.kode !== undefined) map.KODE = String(data.kode).trim().toUpperCase();
+  Object.keys(map).forEach((k) => { if (map[k] === undefined) delete map[k]; });
+  await v.update(map);
+  return v;
+}
+
+async function removeVoucher(id) {
+  const v = await SubscriptionVoucher.findByPk(id);
+  if (!v) throw new ApiError(404, 'Voucher tidak ditemukan.');
+  if (v.USED_COUNT > 0) throw new ApiError(400, 'Voucher sudah pernah dipakai, tidak bisa dihapus. Nonaktifkan saja.');
+  await v.destroy();
+  return true;
+}
+
+async function listVoucherRedemptions(id) {
+  const v = await SubscriptionVoucher.findByPk(id);
+  if (!v) throw new ApiError(404, 'Voucher tidak ditemukan.');
+  return SubscriptionVoucherRedemption.findAll({
+    where: { ID_VOUCHER: id },
+    include: [{ model: Merchant, as: 'merchant', attributes: ['ID', 'NAMA', 'EMAIL'] }],
+    order: [['ID', 'DESC']],
+  });
+}
+
+// Merchant redeem kode voucher - 1 merchant hanya bisa redeem 1x per kode
+// (ditegakkan UNIQUE(ID_VOUCHER, MERCHANT_ID) di DB, lihat migration).
+async function redeemVoucher(kode) {
+  const merchantId = activeMerchantId();
+  if (!merchantId) throw new ApiError(403, 'Redeem voucher hanya dapat dilakukan oleh merchant login.');
+  const code = String(kode || '').trim().toUpperCase();
+
+  return sequelize.transaction(async (transaction) => {
+    const voucher = await SubscriptionVoucher.findOne({
+      where: { KODE: code }, transaction, lock: transaction.LOCK.UPDATE,
+    });
+    if (!voucher) throw new ApiError(404, 'Kode voucher tidak ditemukan.');
+    if (!voucher.IS_ACTIVE) throw new ApiError(400, 'Voucher tidak aktif.');
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (voucher.VALID_FROM && today < voucher.VALID_FROM) throw new ApiError(400, 'Voucher belum berlaku.');
+    if (voucher.VALID_UNTIL && today > voucher.VALID_UNTIL) throw new ApiError(400, 'Voucher sudah kedaluwarsa.');
+    if (voucher.MAX_REDEMPTIONS != null && voucher.USED_COUNT >= voucher.MAX_REDEMPTIONS) {
+      throw new ApiError(400, 'Kuota voucher sudah habis.');
+    }
+
+    const already = await SubscriptionVoucherRedemption.findOne({
+      where: { ID_VOUCHER: voucher.ID, MERCHANT_ID: merchantId }, transaction,
+    });
+    if (already) throw new ApiError(409, 'Voucher ini sudah pernah dipakai toko Anda.');
+
+    const merchant = await Merchant.findByPk(merchantId, { transaction, lock: transaction.LOCK.UPDATE });
+    if (!merchant) throw new ApiError(404, 'Merchant tidak ditemukan.');
+
+    const targetPlan = voucher.TARGET_PLAN === 'BUSINESS' ? 'BUSINESS' : 'PRO';
+    const months = durationMonths(voucher.PAKET);
+    const startsAt = new Date();
+    const newExpiry = extendExpiry(merchant.PRO_EXPIRES_AT, months);
+    const oldPlan = effectivePlan(merchant);
+
+    await merchant.update({
+      PLAN: targetPlan,
+      PRO_STARTS_AT: startsAt,
+      PRO_EXPIRES_AT: newExpiry,
+    }, { transaction });
+
+    await SubscriptionVoucherRedemption.create({
+      ID_VOUCHER: voucher.ID,
+      MERCHANT_ID: merchantId,
+      TARGET_PLAN: targetPlan,
+      PAKET: voucher.PAKET,
+      DURATION_MONTHS: months,
+      PRO_EXPIRES_AT: newExpiry,
+    }, { transaction });
+
+    await voucher.update({ USED_COUNT: voucher.USED_COUNT + 1 }, { transaction });
+
+    await PlanHistory.create({
+      MERCHANT_ID: merchant.ID,
+      OLD_PLAN: oldPlan,
+      NEW_PLAN: targetPlan,
+      PRO_STARTS_AT: startsAt,
+      PRO_EXPIRES_AT: newExpiry,
+      NOTE: `Redeem voucher ${voucher.KODE}`,
+      SOURCE: 'VOUCHER',
+      CHANGED_BY: null,
+    }, { transaction });
+
+    transaction.afterCommit(() => {
+      if (merchant.EMAIL) {
+        sendSubscriptionActivatedEmail(merchant.EMAIL, {
+          storeName: merchant.NAMA,
+          paket: `${targetPlan} ${voucher.PAKET}`,
+          expiresAt: newExpiry,
+        }).catch(() => {});
+      }
+    });
+
+    return { plan: targetPlan, paket: voucher.PAKET, pro_expires_at: newExpiry };
+  });
+}
+
 // Joi.date().iso() meng-koersi query string 'YYYY-MM-DD' menjadi objek Date —
 // normalisasi balik ke 'YYYY-MM-DD' (pakai komponen UTC, karena itulah yang
 // dipakai Joi saat parsing) sebelum dirakit jadi string batas awal/akhir hari.
@@ -387,4 +526,10 @@ module.exports = {
   getPaymentAdmin,
   revenueSummary,
   revenueChart,
+  listVouchers,
+  createVoucher,
+  updateVoucher,
+  removeVoucher,
+  listVoucherRedemptions,
+  redeemVoucher,
 };

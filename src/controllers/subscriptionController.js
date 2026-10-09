@@ -69,4 +69,26 @@ module.exports = {
 
   revenueChart: catchAsync(async (req, res) =>
     success(res, { data: await svc.revenueChart(req.query.tahun) })),
+
+  // ===== Super admin: kelola voucher redeem langganan =====
+  listVouchers: catchAsync(async (req, res) =>
+    success(res, { data: await svc.listVouchers() })),
+
+  createVoucher: catchAsync(async (req, res) =>
+    created(res, await svc.createVoucher(req.body, req.user.id), 'Voucher dibuat')),
+
+  updateVoucher: catchAsync(async (req, res) =>
+    success(res, { data: await svc.updateVoucher(req.params.id, req.body), message: 'Voucher diperbarui' })),
+
+  removeVoucher: catchAsync(async (req, res) => {
+    await svc.removeVoucher(req.params.id);
+    return success(res, { message: 'Voucher dihapus' });
+  }),
+
+  listVoucherRedemptions: catchAsync(async (req, res) =>
+    success(res, { data: await svc.listVoucherRedemptions(req.params.id) })),
+
+  // ===== Merchant: redeem voucher =====
+  redeemVoucher: catchAsync(async (req, res) =>
+    success(res, { data: await svc.redeemVoucher(req.body.kode), message: 'Voucher berhasil dipakai' })),
 };

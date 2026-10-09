@@ -27,6 +27,8 @@ const ModifierOption = require('./ModifierOption');
 const ProdukModifier = require('./ProdukModifier');
 const SubscriptionSetting = require('./SubscriptionSetting');
 const SubscriptionPayment = require('./SubscriptionPayment');
+const SubscriptionVoucher = require('./SubscriptionVoucher');
+const SubscriptionVoucherRedemption = require('./SubscriptionVoucherRedemption');
 const PaymentGatewaySetting = require('./PaymentGatewaySetting');
 const PaymentLog = require('./PaymentLog');
 const PaymentWebhookLog = require('./PaymentWebhookLog');
@@ -107,6 +109,9 @@ ProdukModifier.belongsTo(ModifierGroup, { foreignKey: 'ID_GROUP', targetKey: 'ID
 // ===== Subscription / Billing =====
 SubscriptionPayment.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
 SubscriptionPayment.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'pemohon' });
+SubscriptionVoucher.hasMany(SubscriptionVoucherRedemption, { foreignKey: 'ID_VOUCHER', sourceKey: 'ID', as: 'redemptions' });
+SubscriptionVoucherRedemption.belongsTo(SubscriptionVoucher, { foreignKey: 'ID_VOUCHER', targetKey: 'ID', as: 'voucher' });
+SubscriptionVoucherRedemption.belongsTo(Merchant, { foreignKey: 'MERCHANT_ID', targetKey: 'ID', as: 'merchant' });
 
 // ===== Payment Gateway (Midtrans) =====
 PaymentLog.belongsTo(Penjualan, { foreignKey: 'ID_PENJUALAN', targetKey: 'ID', as: 'penjualan' });
@@ -142,10 +147,11 @@ KasShift.hasMany(Penjualan, { foreignKey: 'ID_SHIFT', sourceKey: 'ID', as: 'penj
   PaymentGatewaySetting, PaymentLog,
   MerchantInvoiceCounter,
   KasShift, KasShiftDetail, KasMutasi,
-  Satuan, Member,
+  Satuan, Member, SubscriptionVoucherRedemption,
 ].forEach((m) => scopeModel(m));
-// Catatan: Merchant, RegistrationOtp, SubscriptionSetting TIDAK di-scope
-// (dikelola super admin / global / alur publik).
+// Catatan: Merchant, RegistrationOtp, SubscriptionSetting, SubscriptionVoucher
+// TIDAK di-scope (dikelola super admin / global / alur publik). Voucher redeem
+// (SubscriptionVoucherRedemption) TETAP di-scope karena per-merchant.
 // PaymentWebhookLog TIDAK di-scope: webhook Midtrans publik tanpa konteks tenant;
 // MERCHANT_ID diisi eksplisit dari hasil parse order_id setelah signature valid.
 
@@ -156,6 +162,7 @@ module.exports = {
   Retur, DetailRetur, RekamStok, Penyusutan, Transaksi,
   OpenBill, OpenBillDetail, OpenBillPayment,
   TaxSetting, Voucher, SubscriptionSetting, SubscriptionPayment, Meja,
+  SubscriptionVoucher, SubscriptionVoucherRedemption,
   ModifierGroup, ModifierOption, ProdukModifier,
   PaymentGatewaySetting, PaymentLog, PaymentWebhookLog,
   Merchant, MerchantInvoiceCounter, RegistrationOtp, PasswordResetOtp, EmailChangeOtp, PlanHistory, Provinsi, Kota,
