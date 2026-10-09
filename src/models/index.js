@@ -91,6 +91,8 @@ OpenBill.hasMany(OpenBillDetail, { foreignKey: 'ID_OPEN_BILL', sourceKey: 'ID', 
 OpenBillDetail.belongsTo(OpenBill, { foreignKey: 'ID_OPEN_BILL', targetKey: 'ID', as: 'bill' });
 OpenBillDetail.belongsTo(Produk, { foreignKey: 'ID_PRODUK', targetKey: 'ID', as: 'produk' });
 OpenBill.belongsTo(Pengguna, { foreignKey: 'ID_USER', targetKey: 'ID', as: 'kasir' });
+OpenBill.belongsTo(Member, { foreignKey: 'MEMBER_ID', targetKey: 'ID', as: 'member' });
+Member.hasMany(OpenBill, { foreignKey: 'MEMBER_ID', sourceKey: 'ID', as: 'openBills' });
 OpenBill.belongsTo(Penjualan, { foreignKey: 'ID_PENJUALAN', targetKey: 'ID', as: 'penjualan' });
 OpenBill.hasMany(OpenBillPayment, { foreignKey: 'ID_OPEN_BILL', sourceKey: 'ID', as: 'payments' });
 OpenBillPayment.belongsTo(OpenBill, { foreignKey: 'ID_OPEN_BILL', targetKey: 'ID', as: 'bill' });

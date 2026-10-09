@@ -8,6 +8,7 @@ const OpenBill = sequelize.define('t_open_bill', {
   ID: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   NO_BILL: { type: DataTypes.STRING(50) },
   CUSTOMER_NAME: { type: DataTypes.STRING(150) },
+  MEMBER_ID: { type: DataTypes.INTEGER }, // FK m_member, null = bill tanpa member (fitur PRO)
   TABLE_NO: { type: DataTypes.STRING(30) },
   NOTE: { type: DataTypes.TEXT },
   STATUS: { type: DataTypes.STRING(12), defaultValue: 'OPEN' },

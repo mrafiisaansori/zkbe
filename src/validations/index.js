@@ -363,6 +363,7 @@ module.exports = {
     create: {
       body: Joi.object({
         customer_name: Joi.string().max(150).allow('', null),
+        member_id: Joi.number().integer().allow(null),
         table_no: Joi.string().max(30).allow('', null),
         note: Joi.string().allow('', null),
         items: Joi.array().items(Joi.object({
@@ -377,6 +378,7 @@ module.exports = {
       params: idParam.params,
       body: Joi.object({
         customer_name: Joi.string().max(150).allow('', null),
+        member_id: Joi.number().integer().allow(null),
         table_no: Joi.string().max(30).allow('', null),
         note: Joi.string().allow('', null),
         items: Joi.array().items(Joi.object({

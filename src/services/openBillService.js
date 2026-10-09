@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
 const {
   sequelize, OpenBill, OpenBillDetail, OpenBillPayment, Produk, Pengguna, Merchant, Penjualan, JenisBayar,
-  PaymentGatewaySetting, PaymentLog,
+  PaymentGatewaySetting, PaymentLog, Member,
 } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { activeMerchantId } = require('../utils/tenancy');
@@ -48,6 +48,7 @@ const STATUS = { OPEN: 'OPEN', PAID: 'PAID', CANCELLED: 'CANCELLED' };
 
 const includeFull = [
   { model: Pengguna, as: 'kasir', attributes: ['ID', 'NAMA'] },
+  { model: Member, as: 'member', attributes: ['ID', 'NAMA', 'NO_HP'] },
   { model: OpenBillDetail, as: 'detail', include: [{ model: Produk, as: 'produk', attributes: ['ID', 'NAMA', 'STOK'] }] },
   {
     model: OpenBillPayment,
@@ -58,7 +59,15 @@ const includeFull = [
     ],
   },
 ];
-const LIST_ATTRIBUTES = ['ID', 'NO_BILL', 'CUSTOMER_NAME', 'TABLE_NO', 'NOTE', 'STATUS', 'TOTAL', 'ID_USER', 'ID_PENJUALAN', 'CREATED_AT'];
+const LIST_ATTRIBUTES = ['ID', 'NO_BILL', 'CUSTOMER_NAME', 'MEMBER_ID', 'TABLE_NO', 'NOTE', 'STATUS', 'TOTAL', 'ID_USER', 'ID_PENJUALAN', 'CREATED_AT'];
+
+// Member (fitur PRO) opsional di open bill - sama seperti checkout penjualan biasa.
+async function resolveMemberId(member_id, t) {
+  if (!member_id) return null;
+  const member = await Member.findByPk(member_id, { transaction: t });
+  if (!member) throw new ApiError(404, 'Member tidak ditemukan');
+  return member.ID;
+}
 
 // Nomor bill unik per merchant: BILL-{PREFIX}-{YYYYMMDD}-{RUNNING}
 async function buildNoBill(id) {
@@ -208,14 +217,16 @@ async function list({ status, search, page, limit } = {}) {
 /**
  * Buat open bill baru (status OPEN). Stok TIDAK disentuh.
  */
-async function create({ customer_name, table_no, note, items, id_user }) {
+async function create({ customer_name, member_id, table_no, note, items, id_user }) {
   await assertPro();
   return sequelize.transaction(async (t) => {
     const { total, resolved } = await resolveItems(items, t);
+    const memberId = await resolveMemberId(member_id, t);
 
     const bill = await OpenBill.create({
       NO_BILL: null,
       CUSTOMER_NAME: customer_name || null,
+      MEMBER_ID: memberId,
       TABLE_NO: table_no || null,
       NOTE: note || null,
       STATUS: STATUS.OPEN,
@@ -246,7 +257,7 @@ async function create({ customer_name, table_no, note, items, id_user }) {
  * Update open bill (hanya bila masih OPEN): ganti seluruh item + info bill.
  * Item lama dihapus lalu ditulis ulang dari payload. Stok TIDAK disentuh.
  */
-async function update(id, { customer_name, table_no, note, items }) {
+async function update(id, { customer_name, member_id, table_no, note, items }) {
   await assertPro();
   await sequelize.transaction(async (t) => {
     const bill = await OpenBill.findByPk(id, { transaction: t });
@@ -255,6 +266,7 @@ async function update(id, { customer_name, table_no, note, items }) {
 
     const patch = {};
     if (customer_name !== undefined) patch.CUSTOMER_NAME = customer_name || null;
+    if (member_id !== undefined) patch.MEMBER_ID = await resolveMemberId(member_id, t);
     if (table_no !== undefined) patch.TABLE_NO = table_no || null;
     if (note !== undefined) patch.NOTE = note || null;
 
@@ -317,6 +329,7 @@ async function pay(id, { id_jenis_bayar, bayar, keterangan, diskon = 0, id_user 
       bayar,
       diskon,
       keterangan: keterangan || `Open Bill ${bill.NO_BILL}`,
+      member_id: bill.MEMBER_ID,
       _trusted: true,
       _transaction: t,
     });
@@ -374,6 +387,7 @@ async function payPartial(id, {
       bayar,
       diskon,
       keterangan: keterangan || `Split Bill ${bill.NO_BILL}${payer_name ? ` - ${payer_name}` : ''}`,
+      member_id: bill.MEMBER_ID,
       _trusted: true,
       _transaction: t,
     });
@@ -432,6 +446,7 @@ async function createPartialQris(id, {
       id_user: id_user || bill.ID_USER,
       diskon,
       keterangan: keterangan || `Split Bill ${bill.NO_BILL}${payer_name ? ` - ${payer_name}` : ''}`,
+      member_id: bill.MEMBER_ID,
       _trusted: true,
       payment: { provider: 'midtrans', status: 'PENDING', status_bayar: 'PENDING' },
       _transaction: t,
