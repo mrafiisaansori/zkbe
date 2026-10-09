@@ -81,6 +81,7 @@ function formatStrukText(trx, identitas) {
   lines.push(`No. Nota: ${trx.NO_NOTA}`);
   lines.push(`Tanggal: ${formatTanggalJam(trx.TANGGAL, trx.JAM)}`);
   lines.push(`Kasir: ${trx.kasir?.NAMA || '-'}`);
+  if (trx.member?.NAMA) lines.push(`Member: ${trx.member.NAMA}`);
   lines.push('');
   lines.push('```');
   lines.push(blok.join('\n'));
